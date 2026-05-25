@@ -74,6 +74,11 @@ const MEDIAPIPE_WASM_URL = `${MEDIAPIPE_PACKAGE_URL}/wasm`;
 const POSE_MODEL_URL =
   "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/latest/pose_landmarker_lite.task";
 const LANDMARK_CONFIDENCE = 0.42;
+const BODY_REACQUIRE_FRAMES = 8;
+const HEAD_LANDMARKS = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+const SHOULDER_LANDMARKS = [11, 12];
+const ARM_LANDMARKS = [13, 14, 15, 16];
+const HIP_LANDMARKS = [23, 24];
 const POSE_CONNECTIONS = [
   [11, 12],
   [11, 13],
@@ -168,6 +173,8 @@ const state = {
   poseImpulse: 0,
   trackingSignal: 0,
   trackingMode: "motion",
+  bodyDetected: false,
+  bodyReacquireFrames: 0,
   hitPulse: null,
   lanePulse: null,
   presence: 0,
@@ -1662,6 +1669,47 @@ function calculatePoseBox(landmarks) {
   };
 }
 
+function countVisibleLandmarks(landmarks, indices) {
+  return indices.filter((index) => visibleLandmark(landmarks[index])).length;
+}
+
+function hasReliableBodyPose(landmarks, poseBox) {
+  if (!poseBox) {
+    return false;
+  }
+
+  const headCount = countVisibleLandmarks(landmarks, HEAD_LANDMARKS);
+  const shoulderCount = countVisibleLandmarks(landmarks, SHOULDER_LANDMARKS);
+  const armCount = countVisibleLandmarks(landmarks, ARM_LANDMARKS);
+  const hipCount = countVisibleLandmarks(landmarks, HIP_LANDMARKS);
+  const hasPlayableSize = poseBox.width >= 0.055 && poseBox.height >= 0.09;
+  const hasUpperBody = headCount >= 2 && shoulderCount >= 1 && (shoulderCount >= 2 || armCount >= 1);
+  const hasTorso = shoulderCount >= 1 && hipCount >= 1;
+
+  return hasPlayableSize && (hasUpperBody || hasTorso);
+}
+
+function poseScoringActive() {
+  return Boolean(state.poseSupported && state.poseLandmarker);
+}
+
+function bodyMissingForScoring() {
+  return poseScoringActive() && (!state.bodyDetected || state.trackingMode === "no-body");
+}
+
+function markBodyMissing(songTime, landmarks = [], poseBox = null) {
+  state.poseLandmarks = landmarks;
+  state.poseBox = poseBox;
+  state.trackingMode = "no-body";
+  state.bodyDetected = false;
+  state.bodyReacquireFrames = 0;
+  state.poseEnergy = 0;
+  state.poseImpulse = 0;
+  state.prevPoseLandmarks = null;
+  state.prevPoseTime = songTime;
+  state.presence *= 0.72;
+}
+
 function samplePose(songTime) {
   if (!state.poseLandmarker || !refs.camera.videoWidth || !refs.camera.videoHeight) {
     state.trackingMode = "motion";
@@ -1678,15 +1726,30 @@ function samplePose(songTime) {
   try {
     const result = state.poseLandmarker.detectForVideo(refs.camera, performance.now());
     const landmarks = result.landmarks?.[0] || [];
-    state.poseLandmarks = landmarks;
-    state.poseBox = calculatePoseBox(landmarks);
+    const poseBox = calculatePoseBox(landmarks);
 
-    if (!state.poseBox) {
-      state.trackingMode = "motion";
+    if (!hasReliableBodyPose(landmarks, poseBox)) {
+      markBodyMissing(songTime);
       if (state.stream) {
         setStatus(refs.bodyStatus, "Find body", "warn");
       }
       return;
+    }
+
+    state.poseLandmarks = landmarks;
+    state.poseBox = poseBox;
+
+    if (!state.bodyDetected) {
+      state.bodyReacquireFrames += 1;
+      if (state.bodyReacquireFrames < BODY_REACQUIRE_FRAMES) {
+        state.trackingMode = "no-body";
+        state.poseEnergy = 0;
+        state.poseImpulse = 0;
+        state.prevPoseLandmarks = null;
+        state.prevPoseTime = songTime;
+        setStatus(refs.bodyStatus, "Find body", "warn");
+        return;
+      }
     }
 
     let weightedMotion = 0;
@@ -1717,6 +1780,8 @@ function samplePose(songTime) {
     state.prevPoseLandmarks = landmarks.map((landmark) => ({ ...landmark }));
     state.prevPoseTime = songTime;
     state.trackingMode = "pose";
+    state.bodyDetected = true;
+    state.bodyReacquireFrames = BODY_REACQUIRE_FRAMES;
     state.presence = clamp(state.presence + 0.08, 0, 1);
 
     if (state.gameActive) {
@@ -1733,8 +1798,9 @@ function samplePose(songTime) {
 
 function recordTrackingSample(songTime) {
   const usingPose = state.trackingMode === "pose" && state.poseBox;
-  const impulse = usingPose ? state.poseImpulse : state.motionImpulse;
-  const energy = usingPose ? state.poseEnergy : state.motionEnergy;
+  const bodyMissing = bodyMissingForScoring();
+  const impulse = bodyMissing ? 0 : usingPose ? state.poseImpulse : state.motionImpulse;
+  const energy = bodyMissing ? 0 : usingPose ? state.poseEnergy : state.motionEnergy;
   const cameraAssist = getCameraAssistSeconds();
   state.trackingSignal = impulse;
   refs.motionMeter.style.width = `${clamp(impulse, 0, 100)}%`;
@@ -1744,7 +1810,8 @@ function recordTrackingSample(songTime) {
     cameraAssist,
     impulse,
     energy,
-    mode: usingPose ? "pose" : "motion",
+    bodyDetected: !bodyMissing,
+    mode: bodyMissing ? "no-body" : usingPose ? "pose" : "motion",
   });
 
   const cutoff = songTime - 2.2;
@@ -1759,10 +1826,17 @@ function judgeBeat(beatTime, window) {
   let bestTimedSample = null;
   let strongestWindowSample = null;
   let strongestNearbySample = null;
+  let noBodySample = null;
 
   for (const sample of state.samples) {
     const timingDelta = sample.t - beatTime;
     const absoluteDelta = Math.abs(timingDelta);
+
+    if (sample.mode === "no-body" && absoluteDelta <= window) {
+      if (!noBodySample || absoluteDelta < Math.abs(noBodySample.t - beatTime)) {
+        noBodySample = sample;
+      }
+    }
 
     if (absoluteDelta <= diagnosticWindow) {
       if (!strongestNearbySample || sample.impulse > strongestNearbySample.impulse) {
@@ -1785,6 +1859,17 @@ function judgeBeat(beatTime, window) {
         }
       }
     }
+  }
+
+  if (noBodySample || bodyMissingForScoring()) {
+    addHit("miss", 0, 0, {
+      reason: "no-body",
+      threshold,
+      timingDelta: noBodySample ? noBodySample.t - beatTime : null,
+      rawTimingDelta: noBodySample ? (noBodySample.rawT ?? noBodySample.t) - beatTime : null,
+      mode: "no-body",
+    });
+    return;
   }
 
   if (!bestTimedSample) {
@@ -1922,6 +2007,10 @@ function formatHitDiagnosis(result) {
     Math.abs((result.rawTimingDelta || 0) - (result.timingDelta || 0)) > 0.018;
 
   if (result.type === "miss") {
+    if (result.reason === "no-body") {
+      return "body not detected";
+    }
+
     if (result.reason === "low-motion") {
       return [`move low ${movementText}`, assistedTiming].filter(Boolean).join(" · ");
     }
@@ -2191,27 +2280,34 @@ function drawMotionOverlay() {
     return;
   }
 
+  const suppressMotionFallback = bodyMissingForScoring();
   const cellWidth = canvas.width / GRID_COLS;
   const cellHeight = canvas.height / GRID_ROWS;
-  for (let y = 0; y < GRID_ROWS; y += 1) {
-    for (let x = 0; x < GRID_COLS; x += 1) {
-      const amount = state.motionGrid[y * GRID_COLS + x];
-      if (amount <= 0.08) {
-        continue;
-      }
+  if (!suppressMotionFallback) {
+    for (let y = 0; y < GRID_ROWS; y += 1) {
+      for (let x = 0; x < GRID_COLS; x += 1) {
+        const amount = state.motionGrid[y * GRID_COLS + x];
+        if (amount <= 0.08) {
+          continue;
+        }
 
-      const mirroredX = GRID_COLS - x - 1;
-      context.fillStyle = `rgba(85, 199, 247, ${clamp(amount * 0.2, 0.06, 0.28)})`;
-      context.fillRect(
-        mirroredX * cellWidth,
-        y * cellHeight,
-        Math.ceil(cellWidth),
-        Math.ceil(cellHeight),
-      );
+        const mirroredX = GRID_COLS - x - 1;
+        context.fillStyle = `rgba(85, 199, 247, ${clamp(amount * 0.2, 0.06, 0.28)})`;
+        context.fillRect(
+          mirroredX * cellWidth,
+          y * cellHeight,
+          Math.ceil(cellWidth),
+          Math.ceil(cellHeight),
+        );
+      }
     }
   }
 
   if (drawBodyTrackingOverlay(context, canvas)) {
+    return;
+  }
+
+  if (suppressMotionFallback) {
     return;
   }
 
