@@ -4,21 +4,62 @@ BeatCam Dance by Niko is a browser-based webcam dance game. Load a song, turn on
 
 The game is designed around free movement: you do not have to perform a specific dance. The camera tracks your body, the song is mapped automatically, and the scoring rewards movement that lands near the beat.
 
-## Run it locally
+## Install and run locally
 
-Start a local web server from this folder:
+BeatCam Dance by Niko is a static browser app. There is no `npm install` or build step. To "install" it, put the project folder anywhere on your computer, such as `Desktop`, `Documents`, or a development folder.
+
+### Option 1: Clone with Git
+
+If you have Git installed, open Terminal or Command Prompt and run:
+
+```bash
+git clone https://github.com/Niko2756/beatcam-dance-by-niko.git
+cd beatcam-dance-by-niko
+```
+
+### Option 2: Download ZIP
+
+If you do not want to use Git:
+
+1. Open the GitHub repository page.
+2. Click `Code`.
+3. Click `Download ZIP`.
+4. Unzip the file.
+5. Open Terminal or Command Prompt inside the unzipped project folder.
+
+### Start the local server
+
+On macOS or Linux:
 
 ```bash
 python3 -m http.server 5173
 ```
 
-Then open:
+On Windows:
+
+```bash
+py -m http.server 5173
+```
+
+Then open this address in your browser:
 
 ```text
 http://localhost:5173
 ```
 
-Camera access usually requires the page to be served from `localhost` or HTTPS. Opening `index.html` directly may block webcam features in some browsers.
+If port `5173` is already busy, use another port:
+
+```bash
+python3 -m http.server 8000
+```
+
+Then open:
+
+```text
+http://localhost:8000
+```
+
+Chrome or Edge is recommended because webcam and MediaPipe pose tracking support is strongest there. Camera access usually requires the page to be served from `localhost` or HTTPS. Opening `index.html` directly may block webcam features in some browsers.
 
 ## How to play
 
