@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>BeatCam Dance by Niko</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <section class="stage">
+        <header class="topbar">
+          <div>
+            <p class="eyebrow">BeatCam Dance by Niko</p>
+            <h1>Dance on the beat</h1>
+          </div>
+          <div class="status-strip" aria-label="Game status">
+            <span id="cameraStatus" class="status-dot">Camera idle</span>
+            <span id="bodyStatus" class="status-dot">Body tracker idle</span>
+            <span id="songStatus" class="status-dot">No song loaded</span>
+            <span id="mapStatus" class="status-dot">Map idle</span>
+            <span id="beatStatus" class="status-dot">BPM idle</span>
+          </div>
+        </header>
+
+        <div class="game-grid">
+          <section class="camera-panel" aria-label="Camera stage">
+            <video id="camera" autoplay playsinline muted></video>
+            <canvas id="motionCanvas"></canvas>
+            <div id="hitFlash" class="hit-flash" aria-live="polite"></div>
+            <div id="countdownOverlay" class="countdown-overlay" aria-live="assertive" aria-hidden="true">
+              <span id="countdownValue">1</span>
+            </div>
+            <div class="motion-meter" aria-label="Motion intensity">
+              <span id="motionMeter"></span>
+            </div>
+          </section>
+
+          <aside class="score-panel" aria-label="Score">
+            <div class="score-card primary-score">
+              <span>Score</span>
+              <strong id="scoreValue">0</strong>
+            </div>
+            <div class="score-row">
+              <div class="score-card">
+                <span>Combo</span>
+                <strong id="comboValue">0</strong>
+              </div>
+              <div class="score-card">
+                <span>Multiplier</span>
+                <strong id="multiplierValue">0x</strong>
+              </div>
+            </div>
+            <div class="score-row">
+              <div class="score-card">
+                <span>Best</span>
+                <strong id="bestValue">0</strong>
+              </div>
+              <div class="score-card">
+                <span>Accuracy</span>
+                <strong id="accuracyValue">0%</strong>
+              </div>
+            </div>
+            <div class="score-card compact-score">
+              <span>Time</span>
+              <strong id="timeValue">0:00</strong>
+            </div>
+            <ol id="recentHits" class="recent-hits" aria-label="Recent hits"></ol>
+          </aside>
+        </div>
+
+        <section class="beat-lane" aria-label="Beat lane">
+          <canvas id="beatCanvas"></canvas>
+        </section>
+      </section>
+
+      <section class="control-panel" aria-label="Game controls">
+        <div class="control-band">
+          <label>
+            <span>Player</span>
+            <input id="playerName" type="text" value="Player 1" maxlength="24" />
+          </label>
+          <label class="file-picker">
+            <span>Song</span>
+            <input id="songFile" type="file" accept="audio/*" />
+          </label>
+          <audio id="songPlayer" controls preload="metadata"></audio>
+        </div>
+
+        <div class="control-band tight">
+          <button id="cameraButton" class="secondary" type="button" title="Start camera">Camera</button>
+          <button id="startButton" class="primary" type="button" title="Start round">Start</button>
+          <button id="stopButton" class="danger" type="button" title="Stop round" disabled>Stop</button>
+        </div>
+
+        <div class="control-band settings">
+          <label>
+            <span>BPM</span>
+            <input id="bpmInput" type="number" min="60" max="220" value="120" />
+          </label>
+          <button id="tapButton" type="button" title="Tap the beat">Tap</button>
+          <button id="offsetBackButton" type="button" title="Move beat grid earlier">-20ms</button>
+          <button id="offsetForwardButton" type="button" title="Move beat grid later">+20ms</button>
+          <label class="range-control">
+            <span>Difficulty</span>
+            <input id="motionThreshold" type="range" min="0" max="100" value="33" />
+          </label>
+          <label class="range-control">
+            <span>Timing Forgiveness</span>
+            <input id="timingWindow" type="range" min="90" max="240" value="180" />
+          </label>
+          <label class="range-control camera-assist-control">
+            <span class="range-heading">
+              <span>Camera Timing Assist</span>
+              <output id="cameraAssistValue" for="cameraAssist">40ms</output>
+            </span>
+            <input id="cameraAssist" type="range" min="0" max="180" step="10" value="40" />
+          </label>
+        </div>
+
+        <section class="leaderboard" aria-label="Local leaderboard">
+          <header>
+            <h2>High scores</h2>
+            <div class="leaderboard-actions">
+              <button id="exportScoresButton" class="ghost" type="button" title="Export local scores">Export</button>
+              <button id="importScoresButton" class="ghost" type="button" title="Import local scores">Import</button>
+              <button id="shareScoresButton" class="ghost" type="button" title="Share local scores">Share</button>
+              <button id="clearScoresButton" class="ghost" type="button" title="Clear local scores">Clear</button>
+              <input id="importScoresFile" type="file" accept=".csv,text/csv" hidden />
+            </div>
+          </header>
+          <table>
+            <thead>
+              <tr>
+                <th>Song</th>
+                <th>Player</th>
+                <th>Score</th>
+                <th>Date</th>
+              </tr>
+            </thead>
+            <tbody id="leaderboardBody"></tbody>
+          </table>
+        </section>
+      </section>
+    </main>
+
+    <section id="introOverlay" class="intro-overlay" role="dialog" aria-modal="true" aria-labelledby="introTitle" hidden>
+      <div class="intro-window">
+        <p class="eyebrow">BeatCam Dance by Niko</p>
+        <h2 id="introTitle">Move with the music</h2>
+        <p>
+          Use your camera to track body movement, load a song, and dance on the beat.
+          Better timing earns stronger hits, longer combos build multipliers, and missed beats
+          charge a comeback boost for your next Good, Great, or Perfect hit.
+        </p>
+        <ul>
+          <li>Click Camera so the game can track you.</li>
+          <li>Enter a player name and choose a song.</li>
+          <li>Wait for Audio map 100%, then press Start.</li>
+          <li>Dance through the countdown and keep your combo alive.</li>
+        </ul>
+        <div class="intro-actions">
+          <button id="skipIntroButton" class="blue-action" type="button">Skip this, I'm a master</button>
+          <button id="showTutorialButton" class="blue-action primary-blue" type="button">Show me the tutorial</button>
+        </div>
+      </div>
+    </section>
+
+    <section id="tutorialLayer" class="tutorial-layer" aria-live="polite" hidden>
+      <div id="tutorialBubble" class="tutorial-bubble">
+        <span id="tutorialStepLabel"></span>
+        <p id="tutorialText"></p>
+        <button id="endTutorialButton" class="ghost" type="button">End tutorial</button>
+      </div>
+    </section>
+
+    <script src="app.js" type="module"></script>
+  </body>
+</html>
