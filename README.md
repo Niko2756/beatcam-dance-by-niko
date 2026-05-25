@@ -1,10 +1,12 @@
 # BeatCam Dance by Niko
 
-A browser-based dance game prototype that scores webcam motion against a song's beat.
+BeatCam Dance by Niko is a browser-based webcam dance game. Load a song, turn on the camera, dance on the beat, and score points from body movement instead of fixed choreography.
 
-## Run it
+The game is designed around free movement: you do not have to perform a specific dance. The camera tracks your body, the song is mapped automatically, and the scoring rewards movement that lands near the beat.
 
-Start a local server from this folder:
+## Run it locally
+
+Start a local web server from this folder:
 
 ```bash
 python3 -m http.server 5173
@@ -16,33 +18,71 @@ Then open:
 http://localhost:5173
 ```
 
-The app works with the built-in demo beat or an uploaded audio file. Uploaded songs are mapped automatically; the BPM, tap, and offset controls are there for correction when a song needs a human nudge.
+Camera access usually requires the page to be served from `localhost` or HTTPS. Opening `index.html` directly may block webcam features in some browsers.
 
-Uploaded songs are analyzed locally in the browser. The skeleton tracker uses MediaPipe's browser model from a CDN; if it cannot load, the game keeps working with motion-based tracking.
+## How to play
 
-## Current prototype
+1. Click `Camera` and step into frame.
+2. Enter your player name.
+3. Choose a song, then wait for `Audio map 100%`.
+4. Press `Start`.
+5. Dance after the countdown.
 
-- Webcam motion tracking with a mirrored camera stage
-- MediaPipe pose-landmark tracking when the model can load, with motion fallback
-- Skeleton/body-box overlay that pulses on beat hits
-- Webcam countdown before every round so music and scoring start together
-- Richer uploaded-song beat and downbeat mapping from in-browser audio analysis
-- Audio map status that shows analysis progress and a ready state
-- Beat lane driven by the generated beat map, BPM, and beat offset
-- Difficulty slider capped to a playable movement range
-- Built-in synth demo beat
-- Uploaded local audio files
-- Perfect, Great, Good, and Miss scoring
-- Early/late hit diagnostics with movement strength
-- Camera timing assist for scoring webcam movement against the beat
-- Combo multiplier scoring with reset-on-miss behavior
-- Comeback boost after missed beats, scaled by Good, Great, or Perfect timing
-- Combo, multiplier, accuracy, and best-score tracking
-- Local high scores saved per song
-- Export, import, and share controls for the local leaderboard
-- First-run intro and guided tutorial bubbles
+The song starts after the countdown, so the round begins cleanly with the music.
 
-## Next upgrades
+## Scoring
 
-- Add named dance moves and choreography prompts
-- Support multiple local players per song
+Each beat can score as:
+
+- `Perfect`
+- `Great`
+- `Good`
+- `Miss`
+
+Timing matters, but movement matters too. A hit needs fresh movement near the beat. Standing still, walking out of frame, or being too close for the tracker to see a playable body view should score as a miss.
+
+The game uses pose tracking when available and falls back to motion tracking if the pose model cannot load. Pose scoring looks for real movement relative to your body, so simple camera drift or slow swaying is filtered more aggressively. Head movement can still score when your full/playable body is visible.
+
+## Game Systems
+
+- Automatic uploaded-song beat and downbeat mapping
+- Webcam countdown before music and scoring begin
+- Mirrored camera stage with skeleton/body tracking overlay
+- Beat lane that shows upcoming beats
+- Difficulty slider for movement required
+- Timing Forgiveness slider for hit-window size
+- Camera Timing Assist slider and calibration mode
+- Combo multiplier that grows with longer combos
+- Comeback boost after misses, cashed in on the next Good, Great, or Perfect
+- Flow Mode after a long Perfect streak
+- Accuracy, combo, multiplier, best score, and time tracking
+- Results screen at the end of each round
+
+## Leaderboards
+
+High scores are saved locally in the browser per song and player name.
+
+Leaderboard controls:
+
+- `Export` saves scores as a CSV file.
+- `Import` merges a CSV leaderboard back in.
+- `Share` uses native sharing when available, or copies leaderboard text.
+- `Clear` removes local scores.
+
+## Audio Analysis
+
+Uploaded songs are analyzed locally in the browser. The game estimates tempo, beat positions, downbeats, and song difficulty automatically. If analysis fails, it falls back to a regular beat grid based on the best available BPM estimate.
+
+## Body Tracking
+
+The game uses MediaPipe pose-landmark tracking from a browser CDN when available. It requires a playable body view before pose scoring is active. A face-only closeup should not count as a valid body-tracking state.
+
+If MediaPipe cannot load, the game can still use motion-based camera tracking as a fallback.
+
+## Current Notes
+
+This is an active prototype. The current focus is making scoring feel fair and fun:
+
+- Reward intentional dance movement.
+- Prevent easy scoring from standing still, drifting, or face-only framing.
+- Keep the full game playable in one desktop viewport without page scrolling.
