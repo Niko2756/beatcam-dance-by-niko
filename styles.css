@@ -297,7 +297,16 @@ body.is-flow .stage-lights {
   animation: stageSweep 1.25s ease-in-out infinite alternate;
 }
 
-.flow-badge {
+body.is-boss .stage-lights {
+  opacity: 0.85;
+  background:
+    linear-gradient(68deg, transparent 0 12%, rgba(255, 209, 102, 0.18) 26%, transparent 44%),
+    linear-gradient(108deg, transparent 0 46%, rgba(255, 79, 123, 0.15) 58%, transparent 74%),
+    linear-gradient(90deg, rgba(255, 209, 102, 0.14), transparent 30%, transparent 70%, rgba(85, 199, 247, 0.12));
+}
+
+.flow-badge,
+.boss-badge {
   position: absolute;
   z-index: 2;
   border: 1px solid var(--line);
@@ -317,6 +326,14 @@ body.is-flow .stage-lights {
   border-color: rgba(69, 212, 131, 0.72);
   color: var(--green);
   animation: flowBadgePulse 760ms ease-in-out infinite alternate;
+}
+
+.boss-badge {
+  top: 14px;
+  left: 14px;
+  border-color: rgba(255, 209, 102, 0.74);
+  color: var(--yellow);
+  animation: bossBadgePulse 580ms ease-in-out infinite alternate;
 }
 
 .hit-flash {
@@ -584,6 +601,11 @@ body.is-flow #beatCanvas {
   box-shadow: 0 0 28px rgba(69, 212, 131, 0.13);
 }
 
+body.is-boss #beatCanvas {
+  border-color: rgba(255, 209, 102, 0.46);
+  box-shadow: 0 0 30px rgba(255, 209, 102, 0.16);
+}
+
 .control-panel {
   display: grid;
   align-content: start;
@@ -775,6 +797,8 @@ tr:last-child td {
 
 .results-window {
   width: min(640px, 100%);
+  max-height: calc(100dvh - 32px);
+  overflow: auto;
   border: 1px solid rgba(85, 199, 247, 0.38);
   border-radius: 8px;
   padding: 24px;
@@ -843,6 +867,53 @@ tr:last-child td {
   font-weight: 900;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.results-breakdown {
+  margin-top: 14px;
+}
+
+.results-breakdown h3 {
+  margin: 0 0 8px;
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-weight: 900;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.breakdown-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+}
+
+.boss-summary-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.breakdown-grid div {
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #111318;
+}
+
+.breakdown-grid dt {
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.breakdown-grid dd {
+  margin: 4px 0 0;
+  color: var(--text);
+  font-size: 1.05rem;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
 }
 
 .results-actions {
@@ -966,6 +1037,17 @@ tr:last-child td {
   }
   to {
     transform: translateY(-2px);
+  }
+}
+
+@keyframes bossBadgePulse {
+  from {
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.34), 0 0 0 rgba(255, 209, 102, 0);
+    transform: scale(1);
+  }
+  to {
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.34), 0 0 24px rgba(255, 209, 102, 0.32);
+    transform: scale(1.03);
   }
 }
 
@@ -1237,6 +1319,8 @@ tr:last-child td {
   .control-band.settings,
   .calibration-band,
   .results-stats,
+  .breakdown-grid,
+  .boss-summary-grid,
   .results-actions {
     grid-template-columns: 1fr;
   }

@@ -30,6 +30,7 @@
             <div id="stageLights" class="stage-lights" aria-hidden="true"></div>
             <canvas id="motionCanvas"></canvas>
             <div id="flowBadge" class="flow-badge" hidden>Flow Mode</div>
+            <div id="bossBadge" class="boss-badge" hidden>Boss Moment</div>
             <div id="hitFlash" class="hit-flash" aria-live="polite"></div>
             <div id="countdownOverlay" class="countdown-overlay" aria-live="assertive" aria-hidden="true">
               <span id="countdownValue">1</span>
@@ -181,6 +182,44 @@
             <dd id="resultsSong">Demo Beat</dd>
           </div>
         </dl>
+        <section class="results-breakdown" aria-label="Round hit breakdown">
+          <h3>Hit Breakdown</h3>
+          <dl class="breakdown-grid">
+            <div>
+              <dt>Perfect</dt>
+              <dd id="resultsPerfectCount">0</dd>
+            </div>
+            <div>
+              <dt>Great</dt>
+              <dd id="resultsGreatCount">0</dd>
+            </div>
+            <div>
+              <dt>Good</dt>
+              <dd id="resultsGoodCount">0</dd>
+            </div>
+            <div>
+              <dt>Miss</dt>
+              <dd id="resultsMissCount">0</dd>
+            </div>
+          </dl>
+        </section>
+        <section class="results-breakdown" aria-label="Boss moment summary">
+          <h3>Boss Moment Summary</h3>
+          <dl class="breakdown-grid boss-summary-grid">
+            <div>
+              <dt>Boss hits</dt>
+              <dd id="resultsBossHits">0</dd>
+            </div>
+            <div>
+              <dt>Boss misses</dt>
+              <dd id="resultsBossMisses">0</dd>
+            </div>
+            <div>
+              <dt>Boss bonus</dt>
+              <dd id="resultsBossBonus">0</dd>
+            </div>
+          </dl>
+        </section>
         <div class="results-actions">
           <button id="resultsRestartButton" class="blue-action primary-blue" type="button">Restart song</button>
           <button id="resultsCloseButton" class="blue-action" type="button">Close</button>

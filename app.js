@@ -9,6 +9,7 @@ const refs = {
   beatStatus: document.querySelector("#beatStatus"),
   trackingReadiness: document.querySelector("#trackingReadiness"),
   flowBadge: document.querySelector("#flowBadge"),
+  bossBadge: document.querySelector("#bossBadge"),
   stageLights: document.querySelector("#stageLights"),
   motionMeter: document.querySelector("#motionMeter"),
   hitFlash: document.querySelector("#hitFlash"),
@@ -57,6 +58,13 @@ const refs = {
   resultsAccuracy: document.querySelector("#resultsAccuracy"),
   resultsCombo: document.querySelector("#resultsCombo"),
   resultsSong: document.querySelector("#resultsSong"),
+  resultsPerfectCount: document.querySelector("#resultsPerfectCount"),
+  resultsGreatCount: document.querySelector("#resultsGreatCount"),
+  resultsGoodCount: document.querySelector("#resultsGoodCount"),
+  resultsMissCount: document.querySelector("#resultsMissCount"),
+  resultsBossHits: document.querySelector("#resultsBossHits"),
+  resultsBossMisses: document.querySelector("#resultsBossMisses"),
+  resultsBossBonus: document.querySelector("#resultsBossBonus"),
   resultsRestartButton: document.querySelector("#resultsRestartButton"),
   resultsCloseButton: document.querySelector("#resultsCloseButton"),
 };
@@ -84,6 +92,11 @@ const TIMING_DISPLAY_DEADZONE = 0.008;
 const COMEBACK_BOOST_CAP = 4;
 const FLOW_PERFECT_TRIGGER = 10;
 const FLOW_HIT_DURATION = 8;
+const SECTION_BEAT_COUNT = 16;
+const BOSS_SECTION_TOP_SHARE = 0.18;
+const BOSS_SECTION_MAX_COUNT = 3;
+const BOSS_SECTION_VARIANCE_FLOOR = 0.08;
+const BOSS_HIT_BONUS_RATE = 0.35;
 const FRESH_MOVEMENT_WINDOW = 0.2;
 const FRESH_MOVEMENT_THRESHOLD_RATIO = 0.18;
 const FRESH_MOVEMENT_THRESHOLD_MIN = 6;
@@ -179,10 +192,16 @@ const state = {
   maxCombo: 0,
   hits: 0,
   judged: 0,
+  hitCounts: { perfect: 0, great: 0, good: 0, miss: 0 },
+  bossBeatsJudged: 0,
+  bossHits: 0,
+  bossMisses: 0,
+  bossBonusPoints: 0,
   lastJudgeIndex: -1,
   recentResults: [],
   samples: [],
   beatMap: [],
+  songSections: [],
   useBeatMap: false,
   beatInfoReady: false,
   analysisPromise: null,
@@ -439,6 +458,91 @@ function createRegularBeatMap(duration, bpm, offset = 0) {
   return beats;
 }
 
+function buildSongSections(beatMap, duration) {
+  if (!beatMap.length) {
+    return [];
+  }
+
+  const sections = [];
+  for (let index = 0; index < beatMap.length; index += SECTION_BEAT_COUNT) {
+    const beats = beatMap.slice(index, index + SECTION_BEAT_COUNT);
+    if (beats.length < Math.max(4, SECTION_BEAT_COUNT / 2)) {
+      continue;
+    }
+
+    const nextBeat = beatMap[index + beats.length];
+    const averageStrength =
+      beats.reduce((sum, beat) => sum + (beat.strength || 0.72), 0) / beats.length;
+    const downbeatBoost = beats.filter((beat) => beat.kind === "downbeat").length / beats.length;
+
+    sections.push({
+      id: `section-${sections.length}`,
+      index: sections.length,
+      start: beats[0].time,
+      end: nextBeat ? nextBeat.time : Math.min(duration, beats.at(-1).time + getBeatInterval()),
+      averageStrength,
+      energy: averageStrength + downbeatBoost * 0.08,
+      isBoss: false,
+    });
+  }
+
+  if (!sections.length) {
+    return [];
+  }
+
+  const energies = sections.map((section) => section.energy);
+  const variance = Math.max(...energies) - Math.min(...energies);
+
+  if (variance < BOSS_SECTION_VARIANCE_FLOOR) {
+    const lateIndex = clamp(Math.floor(sections.length * 0.68), 0, sections.length - 1);
+    sections[lateIndex].isBoss = true;
+    return sections;
+  }
+
+  const bossCount = clamp(
+    Math.ceil(sections.length * BOSS_SECTION_TOP_SHARE),
+    1,
+    Math.min(BOSS_SECTION_MAX_COUNT, sections.length),
+  );
+  const chosen = [];
+
+  for (const section of [...sections].sort((a, b) => b.energy - a.energy)) {
+    if (chosen.length >= bossCount) {
+      break;
+    }
+
+    if (chosen.some((boss) => Math.abs(boss.index - section.index) <= 1)) {
+      continue;
+    }
+
+    section.isBoss = true;
+    chosen.push(section);
+  }
+
+  if (!chosen.length) {
+    const strongestSection = sections.reduce(
+      (best, section) => (section.energy > best.energy ? section : best),
+      sections[0],
+    );
+    strongestSection.isBoss = true;
+  }
+
+  return sections;
+}
+
+function refreshSongSections() {
+  state.songSections = buildSongSections(getActiveBeatMap(), getSongDuration());
+}
+
+function getSectionAtTime(songTime) {
+  return state.songSections.find((section) => songTime >= section.start && songTime < section.end) || null;
+}
+
+function getBossSectionAtTime(songTime) {
+  const section = getSectionAtTime(songTime);
+  return section?.isBoss ? section : null;
+}
+
 function setSongDifficulty(label, className = "") {
   state.songDifficulty = { label, className };
   refs.songDifficultyValue.textContent = label;
@@ -565,6 +669,13 @@ function buildRoundSummary() {
     accuracy,
     maxCombo: state.maxCombo,
     songTitle: state.currentSong.title,
+    hitCounts: { ...state.hitCounts },
+    bossStats: {
+      judged: state.bossBeatsJudged,
+      hits: state.bossHits,
+      misses: state.bossMisses,
+      bonusPoints: state.bossBonusPoints,
+    },
     isNewBest: state.score > previousBest,
     ...grade,
   };
@@ -577,6 +688,13 @@ function showResultsOverlay(summary) {
   refs.resultsAccuracy.textContent = `${Math.round(summary.accuracy * 100)}%`;
   refs.resultsCombo.textContent = summary.maxCombo.toLocaleString();
   refs.resultsSong.textContent = summary.songTitle;
+  refs.resultsPerfectCount.textContent = summary.hitCounts.perfect.toLocaleString();
+  refs.resultsGreatCount.textContent = summary.hitCounts.great.toLocaleString();
+  refs.resultsGoodCount.textContent = summary.hitCounts.good.toLocaleString();
+  refs.resultsMissCount.textContent = summary.hitCounts.miss.toLocaleString();
+  refs.resultsBossHits.textContent = summary.bossStats.hits.toLocaleString();
+  refs.resultsBossMisses.textContent = summary.bossStats.misses.toLocaleString();
+  refs.resultsBossBonus.textContent = `+${summary.bossStats.bonusPoints.toLocaleString()}`;
   refs.resultsOverlay.hidden = false;
 }
 
@@ -1093,6 +1211,11 @@ function resetRound() {
   state.maxCombo = 0;
   state.hits = 0;
   state.judged = 0;
+  state.hitCounts = { perfect: 0, great: 0, good: 0, miss: 0 };
+  state.bossBeatsJudged = 0;
+  state.bossHits = 0;
+  state.bossMisses = 0;
+  state.bossBonusPoints = 0;
   state.lastJudgeIndex = -1;
   state.recentResults = [];
   state.samples = [];
@@ -1394,12 +1517,14 @@ async function startRound() {
     state.beatMap = createRegularBeatMap(DEMO_DURATION, state.bpm, 0);
     state.useBeatMap = true;
     state.beatInfoReady = true;
+    refreshSongSections();
     setMapStatus("Demo map ready", "live");
     updateDifficultyFromBeatMap(0.82, 0.7);
   } else if (!state.useBeatMap || state.beatMap.length === 0) {
     state.beatMap = createRegularBeatMap(state.currentSong.duration, state.bpm, state.beatOffset);
     state.useBeatMap = true;
     state.beatInfoReady = true;
+    refreshSongSections();
     setMapStatus("Fallback map ready", "warn");
     updateDifficultyFromBeatMap(0.42, 0.3);
   }
@@ -1491,6 +1616,7 @@ function finishRound({ save = true, showResults = save } = {}) {
     updateBeatStatus();
   } else {
     state.beatMap = [];
+    state.songSections = [];
     state.useBeatMap = false;
     state.beatInfoReady = false;
     setIdleStatuses();
@@ -1868,6 +1994,7 @@ async function analyzeSongFile(file) {
     state.beatMap = result.beatMap;
     state.useBeatMap = true;
     state.beatInfoReady = true;
+    refreshSongSections();
     state.analysisError = "";
     state.analysisComplete = true;
     state.analysisConfidence = result.confidence;
@@ -1896,6 +2023,7 @@ async function analyzeSongFile(file) {
       state.useBeatMap = false;
       state.beatMap = createRegularBeatMap(getSongDuration(), state.bpm, state.beatOffset);
       state.beatInfoReady = true;
+      refreshSongSections();
       setMapStatus("Fallback map ready", "warn", `Audio analysis failed: ${error.message}`);
       updateDifficultyFromBeatMap(0.35, 0.25);
     }
@@ -2299,6 +2427,7 @@ function recordTrackingSample(songTime) {
 function judgeBeat(beatTime, window) {
   const threshold = getDifficultyThreshold();
   const diagnosticWindow = window + 0.22;
+  const bossSection = getBossSectionAtTime(beatTime);
   let bestTimedSample = null;
   let strongestWindowSample = null;
   let strongestNearbySample = null;
@@ -2343,6 +2472,7 @@ function judgeBeat(beatTime, window) {
       threshold,
       timingDelta: noBodySample ? noBodySample.t - beatTime : null,
       rawTimingDelta: noBodySample ? (noBodySample.rawT ?? noBodySample.t) - beatTime : null,
+      bossSection,
       mode: "no-body",
     });
     return;
@@ -2365,6 +2495,7 @@ function judgeBeat(beatTime, window) {
       threshold,
       timingDelta: missSample ? missSample.t - beatTime : null,
       rawTimingDelta: missSample ? (missSample.rawT ?? missSample.t) - beatTime : null,
+      bossSection,
       mode: missSample?.mode || state.trackingMode,
     });
     return;
@@ -2377,6 +2508,7 @@ function judgeBeat(beatTime, window) {
     threshold,
     timingDelta,
     rawTimingDelta,
+    bossSection,
     mode: bestTimedSample.mode,
   };
 
@@ -2420,13 +2552,22 @@ function stopFlowMode() {
 
 function addHit(type, delta, impulse, details = {}) {
   const hit = HIT_TYPES[type];
+  const bossActive = Boolean(details.bossSection);
   state.judged += 1;
+  state.hitCounts[type] += 1;
+  if (bossActive) {
+    state.bossBeatsJudged += 1;
+  }
   let awardedPoints = 0;
   let effectiveMultiplier = state.multiplier;
   let comebackBonus = 0;
   let flowBonus = 0;
+  let bossBonusPoints = 0;
 
   if (type === "miss") {
+    if (bossActive) {
+      state.bossMisses += 1;
+    }
     state.combo = 0;
     state.multiplier = 0;
     state.comebackBoost = Math.min(COMEBACK_BOOST_CAP, state.comebackBoost + 1);
@@ -2451,6 +2592,12 @@ function addHit(type, delta, impulse, details = {}) {
     effectiveMultiplier = Math.min(12, state.multiplier + comebackBonus);
     flowBonus = state.flowActive ? 0.25 : 0;
     awardedPoints = Math.round((hit.points + Math.min(120, state.combo * 2)) * effectiveMultiplier * (1 + flowBonus));
+    if (bossActive) {
+      bossBonusPoints = Math.round(awardedPoints * BOSS_HIT_BONUS_RATE);
+      awardedPoints += bossBonusPoints;
+      state.bossHits += 1;
+      state.bossBonusPoints += bossBonusPoints;
+    }
     state.score += awardedPoints;
     state.comebackBoost = 0;
     if (state.flowActive) {
@@ -2469,6 +2616,8 @@ function addHit(type, delta, impulse, details = {}) {
     baseMultiplier: state.multiplier,
     comebackBonus,
     flowBonus,
+    bossBonusPoints,
+    bossActive,
     comebackBoost: state.comebackBoost,
     delta,
     timingDelta: details.timingDelta,
@@ -2552,7 +2701,7 @@ function showHitFlash(label, className) {
         ? "var(--cyan)"
         : className === "good"
           ? "var(--yellow)"
-	          : "var(--red)";
+          : "var(--red)";
   refs.hitFlash.classList.remove("show");
   refs.hitFlash.classList.toggle("flow-hit", state.flowActive);
   window.requestAnimationFrame(() => refs.hitFlash.classList.add("show"));
@@ -2572,17 +2721,19 @@ function renderRecentHits() {
     const diagnosis = document.createElement("small");
     label.textContent = result.label;
     if (result.type === "miss") {
-      detail.textContent = result.comebackBoost
-        ? `0 comeback +${result.comebackBoost}x`
-        : "0";
-    } else if (result.flowBonus > 0 && result.comebackBonus > 0) {
-      detail.textContent = `+${result.points} ${result.multiplier}x comeback flow`;
-    } else if (result.flowBonus > 0) {
-      detail.textContent = `+${result.points} ${result.multiplier}x flow`;
-    } else if (result.comebackBonus > 0) {
-      detail.textContent = `+${result.points} ${result.multiplier}x comeback`;
+      const tags = [
+        result.bossActive ? "boss" : "",
+        result.comebackBoost ? `comeback +${result.comebackBoost}x` : "",
+      ].filter(Boolean);
+      detail.textContent = tags.length ? `0 ${tags.join(" ")}` : "0";
     } else {
-      detail.textContent = `+${result.points} ${result.multiplier}x ${Math.round(result.delta * 1000)}ms`;
+      const tags = [
+        result.bossBonusPoints > 0 ? "boss" : "",
+        result.comebackBonus > 0 ? "comeback" : "",
+        result.flowBonus > 0 ? "flow" : "",
+      ].filter(Boolean);
+      const detailText = tags.length ? tags.join(" ") : `${Math.round(result.delta * 1000)}ms`;
+      detail.textContent = `+${result.points} ${result.multiplier}x ${detailText}`;
     }
     diagnosis.textContent = formatHitDiagnosis(result);
     item.className = HIT_TYPES[result.type].className;
@@ -2721,8 +2872,12 @@ function renderHud() {
   document.body.classList.toggle("is-streak", state.combo >= 10);
   document.body.classList.toggle("is-flow", state.flowActive);
   document.body.classList.toggle("is-paused", state.paused);
+  const activeBossSection = state.gameActive && !state.paused ? getBossSectionAtTime(getSongTime()) : null;
+  document.body.classList.toggle("is-boss", Boolean(activeBossSection));
   refs.flowBadge.hidden = !state.flowActive;
   refs.flowBadge.textContent = state.flowActive ? `Flow Mode · ${state.flowHitsRemaining}` : "Flow Mode";
+  refs.bossBadge.hidden = !activeBossSection;
+  refs.bossBadge.textContent = activeBossSection ? `Boss Moment · +${Math.round(BOSS_HIT_BONUS_RATE * 100)}%` : "Boss Moment";
   setRoundButtons(state.gameActive || state.roundStarting || state.countdownActive);
   updateTrackingReadiness();
   refs.multiplierValue.title =
@@ -2980,10 +3135,26 @@ function drawBeatLane(songTime) {
   const secondsVisible = 3.9;
   const scale = width / secondsVisible;
   const windowWidth = getTimingWindow() * scale;
+  const activeBossSection = state.gameActive ? getBossSectionAtTime(songTime) : null;
 
   context.clearRect(0, 0, width, height);
   context.fillStyle = "#101217";
   context.fillRect(0, 0, width, height);
+
+  if (activeBossSection) {
+    const sweep = (Math.sin(performance.now() / 120) + 1) / 2;
+    context.fillStyle = `rgba(255, 209, 102, ${0.12 + sweep * 0.08})`;
+    context.fillRect(0, 0, width, height);
+    context.strokeStyle = "rgba(255, 79, 123, 0.3)";
+    context.lineWidth = 4;
+    for (let x = -width; x < width * 2; x += 48) {
+      const offset = ((performance.now() / 9) % 48) - 48;
+      context.beginPath();
+      context.moveTo(x + offset, height);
+      context.lineTo(x + offset + 32, 0);
+      context.stroke();
+    }
+  }
 
   if (state.combo >= 10 || state.flowActive) {
     const glow = state.flowActive ? 0.18 : 0.08;
@@ -3002,6 +3173,26 @@ function drawBeatLane(songTime) {
 
   context.fillStyle = "rgba(69, 212, 131, 0.08)";
   context.fillRect(center - windowWidth, 0, windowWidth * 2, height);
+
+  for (const section of state.songSections) {
+    if (!section.isBoss || section.end < songTime - 0.7 || section.start > songTime + secondsVisible) {
+      continue;
+    }
+
+    const startX = center + (section.start - songTime) * scale;
+    const endX = center + (section.end - songTime) * scale;
+    const bandX = clamp(startX, 0, width);
+    const bandWidth = clamp(endX, 0, width) - bandX;
+    if (bandWidth <= 0) {
+      continue;
+    }
+
+    context.fillStyle = "rgba(255, 209, 102, 0.16)";
+    context.fillRect(bandX, 0, bandWidth, height);
+    context.strokeStyle = "rgba(255, 209, 102, 0.46)";
+    context.lineWidth = 2;
+    context.strokeRect(bandX, 2, bandWidth, height - 4);
+  }
 
   context.strokeStyle = "rgba(246, 242, 233, 0.72)";
   context.lineWidth = 3;
@@ -3042,8 +3233,13 @@ function drawBeatLane(songTime) {
     }
 
     const isDownbeat = beat.kind === "downbeat" || beat.index % 4 === 0;
-    const radius = (isDownbeat ? 17 : 12) * clamp(beat.strength || 0.72, 0.55, 1.12);
-    context.fillStyle = isDownbeat ? "rgba(255, 79, 123, 0.96)" : "rgba(85, 199, 247, 0.9)";
+    const isBossBeat = Boolean(getBossSectionAtTime(beatTime));
+    const radius = (isDownbeat ? 17 : 12) * clamp(beat.strength || 0.72, 0.55, 1.12) * (isBossBeat ? 1.16 : 1);
+    context.fillStyle = isBossBeat
+      ? "rgba(255, 209, 102, 0.98)"
+      : isDownbeat
+        ? "rgba(255, 79, 123, 0.96)"
+        : "rgba(85, 199, 247, 0.9)";
     context.beginPath();
     context.arc(x, height / 2, radius, 0, Math.PI * 2);
     context.fill();
@@ -3077,6 +3273,7 @@ function handleSongFile() {
     markAnalysisActive(false);
     state.beatOffset = 0;
     state.beatMap = [];
+    state.songSections = [];
     state.useBeatMap = false;
     state.beatInfoReady = false;
     state.currentSong = currentSongFromSelection();
@@ -3100,6 +3297,7 @@ function handleSongFile() {
   state.analysisError = "";
   state.beatInfoReady = false;
   state.beatMap = [];
+  state.songSections = [];
   state.useBeatMap = false;
   setSongDifficulty("Analyzing song", "medium");
   setStatus(refs.songStatus, state.currentSong.title, "live");

@@ -84,6 +84,19 @@ Timing matters, but movement matters too. A hit needs fresh movement near the be
 
 The game uses pose tracking when available and falls back to motion tracking if the pose model cannot load. Pose scoring looks for real movement relative to your body, so simple camera drift or slow swaying is filtered more aggressively. Head movement can still score when your full/playable body is visible.
 
+## Song Sections / Boss Moments
+
+After a song is mapped, BeatCam Dance automatically groups the beat map into song sections and looks for the highest-energy parts of the track. Those sections become `Boss Moments`.
+
+Boss Moments are meant to make exciting parts of a song feel more rewarding, not more punishing:
+
+- The game does not raise the difficulty during a Boss Moment.
+- Successful hits during a Boss Moment earn bonus points.
+- The beat lane and stage glow more strongly while a Boss Moment is active.
+- Boss hits, boss misses, and boss bonus points are shown in the post-song results.
+
+If the beat map has very even energy, such as the built-in demo beat or a fallback beat grid, the game still creates a late-song Boss Moment so the feature is visible.
+
 ## Game Systems
 
 - Automatic uploaded-song beat and downbeat mapping
@@ -96,8 +109,26 @@ The game uses pose tracking when available and falls back to motion tracking if 
 - Combo multiplier that grows with longer combos
 - Comeback boost after misses, cashed in on the next Good, Great, or Perfect
 - Flow Mode after a long Perfect streak
+- Song Sections / Boss Moments generated from the song's beat energy
 - Accuracy, combo, multiplier, best score, and time tracking
-- Results screen at the end of each round
+- Results screen with hit counts and boss moment summary at the end of each round
+
+## Technical Highlights
+
+- Vanilla HTML, CSS, and JavaScript browser game
+- MediaPipe pose tracking with motion fallback
+- Local audio beat/downbeat analysis
+- Fresh-motion scoring and body-validation anti-cheat logic
+- Boss Moment section detection from beat energy
+- Local leaderboard export, import, and share controls
+
+## What I Learned / Engineering Challenges
+
+- Filtering real movement from sway, drift, and stale motion
+- Handling body loss, face-only framing, and pose reacquisition
+- Aligning webcam movement with music timing
+- Designing comeback, flow, and boss systems without forced choreography
+- Making a camera-heavy app understandable through UI feedback
 
 ## Leaderboards
 
