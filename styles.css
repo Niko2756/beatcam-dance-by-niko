@@ -72,6 +72,10 @@ button.primary {
   font-weight: 800;
 }
 
+body.is-flow button.primary {
+  box-shadow: 0 0 0 1px rgba(69, 212, 131, 0.32), 0 0 24px rgba(69, 212, 131, 0.18);
+}
+
 button.secondary {
   border-color: rgba(85, 199, 247, 0.55);
 }
@@ -231,6 +235,11 @@ h2 {
   color: var(--yellow);
 }
 
+.status-dot.bad {
+  border-color: rgba(255, 107, 95, 0.56);
+  color: var(--red);
+}
+
 .game-grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 260px;
@@ -265,6 +274,50 @@ h2 {
   pointer-events: none;
 }
 
+.stage-lights {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+  background:
+    linear-gradient(74deg, transparent 0 18%, rgba(85, 199, 247, 0.16) 31%, transparent 46%),
+    linear-gradient(112deg, transparent 0 42%, rgba(255, 209, 102, 0.13) 55%, transparent 70%),
+    linear-gradient(90deg, rgba(69, 212, 131, 0.12), transparent 28%, transparent 72%, rgba(255, 79, 123, 0.12));
+  mix-blend-mode: screen;
+  transition: opacity 220ms ease;
+}
+
+body.is-streak .stage-lights {
+  opacity: 0.5;
+}
+
+body.is-flow .stage-lights {
+  opacity: 0.9;
+  animation: stageSweep 1.25s ease-in-out infinite alternate;
+}
+
+.flow-badge {
+  position: absolute;
+  z-index: 2;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 8px 11px;
+  background: rgba(7, 9, 13, 0.72);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.34);
+  font-size: 0.8rem;
+  font-weight: 900;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.flow-badge {
+  top: 14px;
+  right: 14px;
+  border-color: rgba(69, 212, 131, 0.72);
+  color: var(--green);
+  animation: flowBadgePulse 760ms ease-in-out infinite alternate;
+}
+
 .hit-flash {
   position: absolute;
   left: 50%;
@@ -283,6 +336,12 @@ h2 {
     transform 180ms ease;
 }
 
+.hit-flash.flow-hit {
+  text-shadow:
+    0 7px 30px rgba(0, 0, 0, 0.55),
+    0 0 34px rgba(69, 212, 131, 0.62);
+}
+
 .hit-flash.show {
   opacity: 1;
   transform: translate(-50%, -50%) scale(1);
@@ -295,7 +354,9 @@ h2 {
   place-items: center;
   pointer-events: none;
   opacity: 0;
-  background: rgba(0, 0, 0, 0.18);
+  background:
+    linear-gradient(90deg, rgba(85, 199, 247, 0.08), transparent 22%, transparent 78%, rgba(255, 79, 123, 0.08)),
+    rgba(0, 0, 0, 0.24);
   transition: opacity 180ms ease;
 }
 
@@ -321,6 +382,7 @@ h2 {
     border-color 160ms ease,
     color 160ms ease,
     transform 180ms ease;
+  animation: countdownRing 850ms ease-out infinite;
 }
 
 .countdown-overlay.show span {
@@ -384,6 +446,23 @@ h2 {
   border: 1px solid var(--line);
   border-radius: 8px;
   background: #111318;
+  transition:
+    border-color 180ms ease,
+    box-shadow 180ms ease,
+    transform 180ms ease;
+}
+
+body.is-streak .score-card {
+  border-color: rgba(85, 199, 247, 0.26);
+}
+
+body.is-flow .score-card {
+  border-color: rgba(69, 212, 131, 0.4);
+  box-shadow: inset 0 0 24px rgba(69, 212, 131, 0.08);
+}
+
+.score-card.bump {
+  animation: scoreBump 260ms ease-out;
 }
 
 .score-card strong {
@@ -403,6 +482,13 @@ h2 {
   min-height: 128px;
   background:
     linear-gradient(135deg, rgba(255, 79, 123, 0.22), transparent),
+    #111318;
+}
+
+body.is-flow .primary-score {
+  background:
+    linear-gradient(135deg, rgba(69, 212, 131, 0.24), transparent),
+    linear-gradient(230deg, rgba(85, 199, 247, 0.13), transparent 52%),
     #111318;
 }
 
@@ -492,6 +578,11 @@ h2 {
   background: #101217;
 }
 
+body.is-flow #beatCanvas {
+  border-color: rgba(69, 212, 131, 0.36);
+  box-shadow: 0 0 28px rgba(69, 212, 131, 0.13);
+}
+
 .control-panel {
   display: grid;
   align-content: start;
@@ -509,12 +600,12 @@ h2 {
 }
 
 .control-band.settings {
-  grid-template-columns: 1fr 72px 84px 84px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   align-items: end;
 }
 
 .control-band.settings .range-control {
-  grid-column: span 2;
+  grid-column: auto;
 }
 
 .control-band.settings .camera-assist-control {
@@ -539,6 +630,62 @@ h2 {
   min-height: 44px;
 }
 
+.song-meta {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #111318;
+}
+
+.song-meta span {
+  color: var(--muted);
+  font-size: 0.74rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.song-meta strong {
+  overflow: hidden;
+  color: var(--text);
+  font-size: 0.94rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.song-meta strong.easy {
+  color: var(--green);
+}
+
+.song-meta strong.medium {
+  color: var(--cyan);
+}
+
+.song-meta strong.hard {
+  color: var(--yellow);
+}
+
+.song-meta strong.wild {
+  color: var(--pink);
+}
+
+.calibration-band {
+  grid-template-columns: minmax(150px, 0.72fr) minmax(0, 1fr);
+  align-items: center;
+}
+
+.calibration-band output {
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #111318;
+  color: var(--muted);
+  font-size: 0.86rem;
+}
+
 .leaderboard {
   display: grid;
   gap: 10px;
@@ -546,17 +693,29 @@ h2 {
 }
 
 .leaderboard header {
-  display: flex;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+  gap: 8px;
+}
+
+.leaderboard h2 {
+  line-height: 1;
+  white-space: nowrap;
 }
 
 .leaderboard-actions {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   justify-content: flex-end;
-  gap: 8px;
+  gap: 6px;
+  min-width: 0;
+}
+
+.leaderboard-actions button {
+  min-width: 0;
+  padding: 0 9px;
+  font-size: 0.86rem;
 }
 
 table {
@@ -601,6 +760,95 @@ tr:last-child td {
   place-items: center;
   padding: 20px;
   background: rgba(0, 0, 0, 0.74);
+}
+
+.results-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 45;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(0, 0, 0, 0.76);
+}
+
+.results-window {
+  width: min(640px, 100%);
+  border: 1px solid rgba(85, 199, 247, 0.38);
+  border-radius: 8px;
+  padding: 24px;
+  background: #07090d;
+  box-shadow: 0 24px 90px rgba(0, 0, 0, 0.7);
+}
+
+.results-window h2 {
+  margin-bottom: 16px;
+  font-size: clamp(1.7rem, 4vw, 2.8rem);
+}
+
+.results-grade {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.results-grade strong {
+  display: grid;
+  place-items: center;
+  width: clamp(92px, 22vw, 132px);
+  aspect-ratio: 1;
+  border: 3px solid rgba(69, 212, 131, 0.72);
+  border-radius: 50%;
+  color: var(--green);
+  font-size: clamp(3rem, 9vw, 5rem);
+  line-height: 1;
+  box-shadow: inset 0 0 28px rgba(69, 212, 131, 0.1);
+}
+
+.results-grade span {
+  color: var(--text);
+  font-size: clamp(1.1rem, 3vw, 1.6rem);
+  font-weight: 850;
+}
+
+.results-stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin: 0;
+}
+
+.results-stats div {
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #111318;
+}
+
+.results-stats dt {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.results-stats dd {
+  overflow: hidden;
+  margin: 4px 0 0;
+  font-size: 1.2rem;
+  font-weight: 900;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.results-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-top: 18px;
 }
 
 .intro-window {
@@ -702,6 +950,45 @@ tr:last-child td {
     0 0 26px rgba(85, 199, 247, 0.36);
 }
 
+@keyframes countdownRing {
+  0% {
+    box-shadow: 0 0 0 0 rgba(246, 242, 233, 0.28);
+  }
+  100% {
+    box-shadow: 0 0 0 26px rgba(246, 242, 233, 0);
+  }
+}
+
+@keyframes flowBadgePulse {
+  from {
+    transform: translateY(0);
+  }
+  to {
+    transform: translateY(-2px);
+  }
+}
+
+@keyframes scoreBump {
+  0% {
+    transform: scale(1);
+  }
+  40% {
+    transform: scale(1.025);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes stageSweep {
+  from {
+    transform: translateX(-1.8%);
+  }
+  to {
+    transform: translateX(1.8%);
+  }
+}
+
 @media (max-width: 1080px) {
   .app-shell {
     grid-template-columns: 1fr;
@@ -741,7 +1028,10 @@ tr:last-child td {
 
   .score-panel,
   .control-band.tight,
-  .control-band.settings {
+  .control-band.settings,
+  .calibration-band,
+  .results-stats,
+  .results-actions {
     grid-template-columns: 1fr;
   }
 
@@ -752,5 +1042,10 @@ tr:last-child td {
 
   .intro-actions {
     grid-template-columns: 1fr;
+  }
+
+  .results-grade {
+    grid-template-columns: 1fr;
+    justify-items: start;
   }
 }

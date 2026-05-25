@@ -17,6 +17,7 @@
           <div class="status-strip" aria-label="Game status">
             <span id="cameraStatus" class="status-dot">Camera idle</span>
             <span id="bodyStatus" class="status-dot">Body tracker idle</span>
+            <span id="trackingReadiness" class="status-dot">Player idle</span>
             <span id="songStatus" class="status-dot">No song loaded</span>
             <span id="mapStatus" class="status-dot">Map idle</span>
             <span id="beatStatus" class="status-dot">BPM idle</span>
@@ -26,7 +27,9 @@
         <div class="game-grid">
           <section class="camera-panel" aria-label="Camera stage">
             <video id="camera" autoplay playsinline muted></video>
+            <div id="stageLights" class="stage-lights" aria-hidden="true"></div>
             <canvas id="motionCanvas"></canvas>
+            <div id="flowBadge" class="flow-badge" hidden>Flow Mode</div>
             <div id="hitFlash" class="hit-flash" aria-live="polite"></div>
             <div id="countdownOverlay" class="countdown-overlay" aria-live="assertive" aria-hidden="true">
               <span id="countdownValue">1</span>
@@ -85,22 +88,21 @@
             <input id="songFile" type="file" accept="audio/*" />
           </label>
           <audio id="songPlayer" controls preload="metadata"></audio>
+          <div class="song-meta" aria-label="Song details">
+            <span>Song difficulty</span>
+            <strong id="songDifficultyValue">No song loaded</strong>
+          </div>
         </div>
 
         <div class="control-band tight">
           <button id="cameraButton" class="secondary" type="button" title="Start camera">Camera</button>
           <button id="startButton" class="primary" type="button" title="Start round">Start</button>
+          <button id="pauseButton" type="button" title="Pause round" disabled>Pause</button>
+          <button id="restartButton" type="button" title="Restart round" disabled>Restart</button>
           <button id="stopButton" class="danger" type="button" title="Stop round" disabled>Stop</button>
         </div>
 
         <div class="control-band settings">
-          <label>
-            <span>BPM</span>
-            <input id="bpmInput" type="number" min="60" max="220" value="120" />
-          </label>
-          <button id="tapButton" type="button" title="Tap the beat">Tap</button>
-          <button id="offsetBackButton" type="button" title="Move beat grid earlier">-20ms</button>
-          <button id="offsetForwardButton" type="button" title="Move beat grid later">+20ms</button>
           <label class="range-control">
             <span>Difficulty</span>
             <input id="motionThreshold" type="range" min="0" max="100" value="33" />
@@ -116,6 +118,15 @@
             </span>
             <input id="cameraAssist" type="range" min="0" max="180" step="10" value="40" />
           </label>
+        </div>
+
+        <div class="control-band calibration-band">
+          <button id="calibrateButton" class="secondary" type="button" title="Auto-tune camera timing assist">
+            Calibrate Timing
+          </button>
+          <output id="calibrationStatus">
+            Press Calibrate Timing, then make one clear move on each beep. The game will set Camera Timing Assist for you.
+          </output>
         </div>
 
         <section class="leaderboard" aria-label="Local leaderboard">
@@ -143,6 +154,39 @@
         </section>
       </section>
     </main>
+
+    <section id="resultsOverlay" class="results-overlay" role="dialog" aria-modal="true" aria-labelledby="resultsTitle" hidden>
+      <div class="results-window">
+        <p class="eyebrow">Round complete</p>
+        <h2 id="resultsTitle">Results</h2>
+        <div class="results-grade">
+          <strong id="resultsGrade">A</strong>
+          <span id="resultsMessage">Nice run</span>
+        </div>
+        <dl class="results-stats">
+          <div>
+            <dt>Score</dt>
+            <dd id="resultsScore">0</dd>
+          </div>
+          <div>
+            <dt>Accuracy</dt>
+            <dd id="resultsAccuracy">0%</dd>
+          </div>
+          <div>
+            <dt>Best combo</dt>
+            <dd id="resultsCombo">0</dd>
+          </div>
+          <div>
+            <dt>Song</dt>
+            <dd id="resultsSong">Demo Beat</dd>
+          </div>
+        </dl>
+        <div class="results-actions">
+          <button id="resultsRestartButton" class="blue-action primary-blue" type="button">Restart song</button>
+          <button id="resultsCloseButton" class="blue-action" type="button">Close</button>
+        </div>
+      </div>
+    </section>
 
     <section id="introOverlay" class="intro-overlay" role="dialog" aria-modal="true" aria-labelledby="introTitle" hidden>
       <div class="intro-window">
