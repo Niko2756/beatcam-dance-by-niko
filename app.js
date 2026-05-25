@@ -100,8 +100,9 @@ const SHOULDER_LANDMARKS = [11, 12];
 const ARM_LANDMARKS = [13, 14, 15, 16];
 const HIP_LANDMARKS = [23, 24];
 const POSE_ANCHOR_LANDMARKS = [11, 12, 23, 24];
-const POSE_LOCAL_MOTION_DEADZONE = 0.0025;
-const POSE_LOCAL_MOTION_SCALE = 126;
+const POSE_LOCAL_MOTION_DEADZONE = 0.006;
+const POSE_LOCAL_MOTION_SCALE = 108;
+const POSE_PEAK_MOTION_SCALE = 260;
 const POSE_CONNECTIONS = [
   [11, 12],
   [11, 13],
@@ -121,6 +122,11 @@ const POSE_CONNECTIONS = [
   [28, 32],
 ];
 const POSE_MOVEMENT_WEIGHTS = new Map([
+  [0, 1.05],
+  [7, 0.7],
+  [8, 0.7],
+  [9, 0.72],
+  [10, 0.72],
   [11, 0.65],
   [12, 0.65],
   [13, 0.82],
@@ -2092,11 +2098,13 @@ function hasReliableBodyPose(landmarks, poseBox) {
   const shoulderCount = countVisibleLandmarks(landmarks, SHOULDER_LANDMARKS);
   const armCount = countVisibleLandmarks(landmarks, ARM_LANDMARKS);
   const hipCount = countVisibleLandmarks(landmarks, HIP_LANDMARKS);
-  const hasPlayableSize = poseBox.width >= 0.055 && poseBox.height >= 0.09;
-  const hasUpperBody = headCount >= 2 && shoulderCount >= 1 && (shoulderCount >= 2 || armCount >= 1);
-  const hasTorso = shoulderCount >= 1 && hipCount >= 1;
+  const bodyLandmarkCount = shoulderCount + armCount + hipCount;
+  const hasPlayableSize = poseBox.width >= 0.09 && poseBox.height >= 0.16;
+  const hasPlayableUpperBody = shoulderCount >= 2 && (armCount >= 2 || hipCount >= 1);
+  const hasTorso = shoulderCount >= 2 && hipCount >= 1;
+  const isMostlyFace = headCount >= 5 && bodyLandmarkCount < 3;
 
-  return hasPlayableSize && (hasUpperBody || hasTorso);
+  return hasPlayableSize && !isMostlyFace && (hasPlayableUpperBody || hasTorso);
 }
 
 function poseScoringActive() {
@@ -2197,6 +2205,7 @@ function samplePose(songTime) {
 
     let weightedLocalMotion = 0;
     let weightTotal = 0;
+    let peakLocalMotion = 0;
     const elapsed = clamp(songTime - state.prevPoseTime, 1 / 90, 0.2);
     const poseAnchor = calculatePoseAnchor(landmarks, poseBox);
     const previousPoseAnchor = state.prevPoseLandmarks ? calculatePoseAnchor(state.prevPoseLandmarks) : null;
@@ -2220,10 +2229,13 @@ function samplePose(songTime) {
         const speed = Math.max(0, localDistance - POSE_LOCAL_MOTION_DEADZONE) / elapsed;
         weightedLocalMotion += speed * weight;
         weightTotal += weight;
+        peakLocalMotion = Math.max(peakLocalMotion, speed);
       }
     }
 
-    const rawEnergy = weightTotal ? clamp((weightedLocalMotion / weightTotal) * POSE_LOCAL_MOTION_SCALE, 0, 100) : 0;
+    const averageEnergy = weightTotal ? (weightedLocalMotion / weightTotal) * POSE_LOCAL_MOTION_SCALE : 0;
+    const peakEnergy = peakLocalMotion * POSE_PEAK_MOTION_SCALE;
+    const rawEnergy = clamp(Math.max(averageEnergy, peakEnergy), 0, 100);
     const positiveDelta = Math.max(0, rawEnergy - state.poseEnergy);
     state.poseRawEnergy = rawEnergy;
     state.poseEnergy = state.poseEnergy * 0.58 + rawEnergy * 0.42;

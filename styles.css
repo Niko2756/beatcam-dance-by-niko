@@ -27,6 +27,7 @@
 
 body {
   min-height: 100vh;
+  min-height: 100dvh;
   margin: 0;
   background:
     linear-gradient(135deg, rgba(255, 79, 123, 0.16), transparent 32%),
@@ -986,6 +987,211 @@ tr:last-child td {
   }
   to {
     transform: translateX(1.8%);
+  }
+}
+
+@media (min-width: 1081px) {
+  html,
+  body {
+    height: 100%;
+    overflow: hidden;
+  }
+
+  button {
+    min-height: 38px;
+    padding: 0 12px;
+  }
+
+  button.ghost {
+    min-height: 30px;
+    padding: 0 9px;
+  }
+
+  input[type="text"],
+  input[type="number"] {
+    min-height: 38px;
+    padding: 0 10px;
+  }
+
+  input[type="file"] {
+    min-height: 38px;
+    padding: 6px 8px;
+  }
+
+  label {
+    gap: 5px;
+  }
+
+  label span,
+  .score-card span {
+    font-size: 0.68rem;
+  }
+
+  .app-shell {
+    gap: 12px;
+    height: 100dvh;
+    min-height: 0;
+    padding: 10px;
+  }
+
+  .stage {
+    grid-template-rows: auto minmax(0, 1fr) 92px;
+    min-height: 0;
+  }
+
+  .topbar {
+    gap: 12px;
+    padding: 12px 14px;
+  }
+
+  .eyebrow {
+    font-size: 0.7rem;
+  }
+
+  h1 {
+    font-size: clamp(1.25rem, 1.7vw, 1.9rem);
+  }
+
+  .status-strip {
+    gap: 6px;
+  }
+
+  .status-dot {
+    padding: 6px 9px;
+    font-size: 0.74rem;
+  }
+
+  .game-grid {
+    grid-template-columns: minmax(0, 1fr) 250px;
+    gap: 10px;
+    padding: 10px;
+  }
+
+  .camera-panel {
+    min-height: 0;
+  }
+
+  .score-panel,
+  .score-row {
+    gap: 8px;
+  }
+
+  .score-panel {
+    overflow: hidden;
+  }
+
+  .score-card {
+    min-height: 68px;
+    padding: 10px;
+  }
+
+  .score-card strong {
+    font-size: 1.55rem;
+  }
+
+  .primary-score {
+    min-height: 90px;
+  }
+
+  .primary-score strong {
+    font-size: clamp(2rem, 4vw, 3.2rem);
+  }
+
+  .compact-score {
+    min-height: 58px;
+  }
+
+  .recent-hits {
+    gap: 6px;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .recent-hits li {
+    min-height: 30px;
+    padding: 6px 8px;
+    font-size: 0.78rem;
+  }
+
+  .recent-hits li small {
+    font-size: 0.66rem;
+  }
+
+  .beat-lane {
+    padding: 0 10px 10px;
+  }
+
+  #beatCanvas {
+    height: 82px;
+  }
+
+  .control-panel {
+    gap: 8px;
+    height: calc(100dvh - 20px);
+    padding: 10px;
+    overflow: hidden;
+  }
+
+  .control-band {
+    gap: 8px;
+  }
+
+  .song-meta {
+    gap: 2px;
+    padding: 8px 10px;
+  }
+
+  #songPlayer {
+    height: 38px;
+    min-height: 38px;
+  }
+
+  .calibration-band {
+    grid-template-columns: minmax(118px, 0.64fr) minmax(0, 1fr);
+  }
+
+  .calibration-band output {
+    padding: 8px 10px;
+    font-size: 0.78rem;
+    line-height: 1.2;
+  }
+
+  .leaderboard {
+    gap: 6px;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .leaderboard h2 {
+    font-size: 0.92rem;
+  }
+
+  .leaderboard-actions {
+    gap: 5px;
+  }
+
+  .leaderboard-actions button {
+    padding: 0 7px;
+    font-size: 0.78rem;
+  }
+
+  table {
+    table-layout: fixed;
+  }
+
+  th,
+  td {
+    padding: 6px 5px;
+    font-size: 0.74rem;
+    line-height: 1.15;
+  }
+
+  th {
+    font-size: 0.64rem;
+  }
+
+  .leaderboard tbody tr:nth-child(n + 5) {
+    display: none;
   }
 }
 
