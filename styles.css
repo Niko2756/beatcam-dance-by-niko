@@ -81,6 +81,12 @@ button.secondary {
   border-color: rgba(85, 199, 247, 0.55);
 }
 
+button.secondary.active {
+  border-color: rgba(69, 212, 131, 0.72);
+  background: #173121;
+  color: var(--green);
+}
+
 button.danger {
   border-color: rgba(255, 107, 95, 0.62);
 }
@@ -269,6 +275,10 @@ h2 {
 #camera {
   object-fit: cover;
   transform: scaleX(-1);
+}
+
+body.is-demo-mode #camera {
+  opacity: 0;
 }
 
 #motionCanvas {
@@ -694,6 +704,53 @@ body.is-boss #beatCanvas {
   color: var(--pink);
 }
 
+.recent-songs {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+}
+
+.recent-songs header span {
+  color: var(--muted);
+  font-size: 0.74rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.recent-songs-list {
+  display: grid;
+  gap: 6px;
+}
+
+.recent-song-button {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+  padding: 0 10px;
+  background: #111318;
+  text-align: left;
+}
+
+.recent-song-button span,
+.recent-song-button small {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.recent-song-button span {
+  color: var(--text);
+  font-weight: 800;
+}
+
+.recent-song-button small {
+  color: var(--muted);
+  font-size: 0.74rem;
+}
+
 .calibration-band {
   grid-template-columns: minmax(150px, 0.72fr) minmax(0, 1fr);
   align-items: center;
@@ -978,7 +1035,7 @@ tr:last-child td {
 
 .tutorial-bubble::before {
   position: absolute;
-  top: 18px;
+  top: var(--arrow-y, 18px);
   left: -9px;
   width: 16px;
   height: 16px;
@@ -997,7 +1054,7 @@ tr:last-child td {
 
 .tutorial-bubble.top-arrow::before {
   top: -9px;
-  left: 22px;
+  left: var(--arrow-x, 22px);
   transform: rotate(135deg);
 }
 
@@ -1012,6 +1069,12 @@ tr:last-child td {
   margin: 8px 0 12px;
   color: var(--text);
   line-height: 1.4;
+}
+
+.tutorial-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
 }
 
 .tutorial-target {
@@ -1221,6 +1284,20 @@ tr:last-child td {
   .song-meta {
     gap: 2px;
     padding: 8px 10px;
+  }
+
+  .recent-songs {
+    gap: 5px;
+  }
+
+  .recent-song-button {
+    min-height: 30px;
+    padding: 0 8px;
+    font-size: 0.74rem;
+  }
+
+  .recent-song-button small {
+    font-size: 0.68rem;
   }
 
   #songPlayer {

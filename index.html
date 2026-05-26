@@ -93,9 +93,18 @@
             <span>Song difficulty</span>
             <strong id="songDifficultyValue">No song loaded</strong>
           </div>
+          <section id="recentSongsPanel" class="recent-songs" aria-label="Recent songs" hidden>
+            <header>
+              <span>Recent songs</span>
+            </header>
+            <div id="recentSongsList" class="recent-songs-list"></div>
+          </section>
         </div>
 
         <div class="control-band tight">
+          <button id="demoModeButton" class="secondary" type="button" title="Use an anonymous synthetic dancer" hidden>
+            Demo Mode
+          </button>
           <button id="cameraButton" class="secondary" type="button" title="Start camera">Camera</button>
           <button id="startButton" class="primary" type="button" title="Start round">Start</button>
           <button id="pauseButton" type="button" title="Pause round" disabled>Pause</button>
@@ -232,15 +241,15 @@
         <p class="eyebrow">BeatCam Dance by Niko</p>
         <h2 id="introTitle">Move with the music</h2>
         <p>
-          Use your camera to track body movement, load a song, and dance on the beat.
-          Better timing earns stronger hits, longer combos build multipliers, and missed beats
-          charge a comeback boost for your next Good, Great, or Perfect hit.
+          Use your camera to track body movement, choose a song, and dance on the beat.
+          Better timing earns stronger hits, combos build multipliers, Boss Moments add bonus points,
+          and missed beats charge comeback boosts.
         </p>
         <ul>
           <li>Click Camera so the game can track you.</li>
           <li>Enter a player name and choose a song.</li>
           <li>Wait for Audio map 100%, then press Start.</li>
-          <li>Dance through the countdown and keep your combo alive.</li>
+          <li>Move after the countdown and keep your combo alive.</li>
         </ul>
         <div class="intro-actions">
           <button id="skipIntroButton" class="blue-action" type="button">Skip this, I'm a master</button>
@@ -253,7 +262,10 @@
       <div id="tutorialBubble" class="tutorial-bubble">
         <span id="tutorialStepLabel"></span>
         <p id="tutorialText"></p>
-        <button id="endTutorialButton" class="ghost" type="button">End tutorial</button>
+        <div class="tutorial-actions">
+          <button id="endTutorialButton" class="ghost" type="button">Skip tutorial</button>
+          <button id="tutorialNextButton" class="blue-action" type="button">Next</button>
+        </div>
       </div>
     </section>
 

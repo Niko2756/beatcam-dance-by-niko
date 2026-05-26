@@ -26,6 +26,9 @@ const refs = {
   songFile: document.querySelector("#songFile"),
   songPlayer: document.querySelector("#songPlayer"),
   songDifficultyValue: document.querySelector("#songDifficultyValue"),
+  recentSongsPanel: document.querySelector("#recentSongsPanel"),
+  recentSongsList: document.querySelector("#recentSongsList"),
+  demoModeButton: document.querySelector("#demoModeButton"),
   cameraButton: document.querySelector("#cameraButton"),
   startButton: document.querySelector("#startButton"),
   pauseButton: document.querySelector("#pauseButton"),
@@ -51,6 +54,7 @@ const refs = {
   tutorialStepLabel: document.querySelector("#tutorialStepLabel"),
   tutorialText: document.querySelector("#tutorialText"),
   endTutorialButton: document.querySelector("#endTutorialButton"),
+  tutorialNextButton: document.querySelector("#tutorialNextButton"),
   resultsOverlay: document.querySelector("#resultsOverlay"),
   resultsGrade: document.querySelector("#resultsGrade"),
   resultsMessage: document.querySelector("#resultsMessage"),
@@ -72,7 +76,10 @@ const refs = {
 const STORAGE_KEY = "beatcam-dance-highscores-v1";
 const INTRO_STORAGE_KEY = "beatcam-dance-intro-seen-v3";
 const SETTINGS_STORAGE_KEY = "beatcam-dance-settings-v1";
+const RECENT_SONGS_STORAGE_KEY = "beatcam-dance-recent-songs-v1";
 const DEMO_DURATION = 64;
+const VISUAL_DEMO_DURATION = 24;
+const VISUAL_DEMO_BPM = 128;
 const MOTION_WIDTH = 80;
 const MOTION_HEIGHT = 45;
 const GRID_COLS = 16;
@@ -168,6 +175,7 @@ const state = {
   audioContext: null,
   fileObjectUrl: "",
   audioMode: "demo",
+  visualDemoMode: false,
   gameActive: false,
   roundStarting: false,
   paused: false,
@@ -443,6 +451,14 @@ function saveSettings() {
   }
 }
 
+function getBuiltInDemoDuration() {
+  return state.visualDemoMode ? VISUAL_DEMO_DURATION : DEMO_DURATION;
+}
+
+function getBuiltInDemoBpm() {
+  return state.visualDemoMode ? VISUAL_DEMO_BPM : state.bpm;
+}
+
 function createRegularBeatMap(duration, bpm, offset = 0) {
   const interval = 60 / bpm;
   const beats = [];
@@ -452,6 +468,29 @@ function createRegularBeatMap(duration, bpm, offset = 0) {
       time,
       strength: beats.length % 4 === 0 ? 1 : 0.72,
       kind: beats.length % 4 === 0 ? "downbeat" : "beat",
+    });
+  }
+
+  return beats;
+}
+
+function createVisualDemoBeatMap(duration, bpm) {
+  const interval = 60 / bpm;
+  const beats = [];
+
+  for (let index = 0, time = 0; time <= duration + interval * 0.5; index += 1, time += interval) {
+    const phrase = Math.floor(index / SECTION_BEAT_COUNT);
+    const beatInBar = index % 4;
+    const bossPhrase = phrase === 1;
+    const accent = beatInBar === 0 ? 0.18 : beatInBar === 2 ? 0.08 : 0;
+    const strength = bossPhrase
+      ? clamp(0.82 + accent + (index % 3) * 0.025, 0.7, 1)
+      : clamp(0.54 + accent + (index % 5) * 0.018, 0.42, 0.78);
+
+    beats.push({
+      time,
+      strength,
+      kind: beatInBar === 0 ? "downbeat" : "beat",
     });
   }
 
@@ -599,6 +638,73 @@ function getPlayerName() {
   return refs.playerName.value.trim() || "Player 1";
 }
 
+function loadRecentSongs() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(RECENT_SONGS_STORAGE_KEY) || "[]");
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function persistRecentSongs(songs) {
+  localStorage.setItem(RECENT_SONGS_STORAGE_KEY, JSON.stringify(songs.slice(0, 5)));
+}
+
+function rememberRecentSong(song = state.currentSong) {
+  if (!song || state.visualDemoMode || !refs.songFile.files?.[0]) {
+    return;
+  }
+
+  const file = refs.songFile.files[0];
+  const key = `file:${file.name}:${file.size}`;
+  const existing = loadRecentSongs().filter((entry) => entry.key !== key);
+  persistRecentSongs([
+    {
+      key,
+      title: song.title || sanitizeTitle(file.name),
+      bpm: Math.round(state.bpm || 0),
+      duration: Math.round(song.duration || getSongDuration() || 0),
+      lastPlayed: new Date().toISOString(),
+    },
+    ...existing,
+  ]);
+  renderRecentSongs();
+}
+
+function formatRecentSongMeta(entry) {
+  const parts = [];
+  if (entry.bpm) {
+    parts.push(`${entry.bpm} BPM`);
+  }
+  if (entry.duration) {
+    parts.push(formatTime(entry.duration));
+  }
+  return parts.join(" · ");
+}
+
+function renderRecentSongs() {
+  const songs = loadRecentSongs();
+  refs.recentSongsList.replaceChildren();
+  refs.recentSongsPanel.hidden = songs.length === 0;
+
+  for (const entry of songs.slice(0, 3)) {
+    const button = document.createElement("button");
+    const title = document.createElement("span");
+    const meta = document.createElement("small");
+    button.type = "button";
+    button.className = "recent-song-button";
+    title.textContent = entry.title;
+    meta.textContent = formatRecentSongMeta(entry) || "Choose file again";
+    button.title = `Choose ${entry.title} again from your files to replay it.`;
+    button.append(title, meta);
+    button.addEventListener("click", () => {
+      setStatus(refs.songStatus, `Choose file again: ${entry.title}`, "warn");
+    });
+    refs.recentSongsList.append(button);
+  }
+}
+
 function loadScores() {
   try {
     const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
@@ -619,7 +725,7 @@ function getBestForCurrentSong() {
 }
 
 function saveRoundScore() {
-  if (state.roundSaved || state.judged === 0) {
+  if (state.roundSaved || state.judged === 0 || state.visualDemoMode) {
     return;
   }
 
@@ -637,6 +743,7 @@ function saveRoundScore() {
 
   scores.sort((a, b) => b.score - a.score);
   persistScores(scores.slice(0, 50));
+  rememberRecentSong();
   renderLeaderboard();
 }
 
@@ -676,14 +783,19 @@ function buildRoundSummary() {
       misses: state.bossMisses,
       bonusPoints: state.bossBonusPoints,
     },
-    isNewBest: state.score > previousBest,
+    isDemoMode: state.visualDemoMode,
+    isNewBest: !state.visualDemoMode && state.score > previousBest,
     ...grade,
   };
 }
 
 function showResultsOverlay(summary) {
   refs.resultsGrade.textContent = summary.grade;
-  refs.resultsMessage.textContent = summary.isNewBest ? `New high score · ${summary.message}` : summary.message;
+  refs.resultsMessage.textContent = summary.isDemoMode
+    ? `${summary.message} · Demo score not saved`
+    : summary.isNewBest
+      ? `New high score · ${summary.message}`
+      : summary.message;
   refs.resultsScore.textContent = summary.score.toLocaleString();
   refs.resultsAccuracy.textContent = `${Math.round(summary.accuracy * 100)}%`;
   refs.resultsCombo.textContent = summary.maxCombo.toLocaleString();
@@ -997,25 +1109,25 @@ function getTutorialSteps() {
       id: "camera",
       label: "Step 1 of 4",
       target: refs.cameraButton,
-      text: "Click Camera so BeatCam Dance by Niko can see your body movement.",
+      text: "Click Camera. The game needs camera access before real body scoring can start.",
     },
     {
       id: "player",
       label: "Step 2 of 4",
       target: refs.playerName,
-      text: "Enter or confirm your player name. Scores are saved locally under this name.",
+      text: "Enter your player name. Local high scores are saved under this name.",
     },
     {
       id: "song",
       label: "Step 3 of 4",
       target: refs.songFile,
-      text: "Choose a song. The game will analyze it and build the beat map.",
+      text: "Choose a song. Wait for the audio map to reach 100% before starting.",
     },
     {
       id: "start",
       label: "Step 4 of 4",
       target: refs.startButton,
-      text: "When Audio map reaches 100%, press Start and dance after the countdown.",
+      text: "Press Start. The music and scoring begin after the countdown.",
     },
   ];
 }
@@ -1031,9 +1143,13 @@ function positionTutorialBubble(target) {
   const rect = target.getBoundingClientRect();
   const bubble = refs.tutorialBubble;
   const bubbleRect = bubble.getBoundingClientRect();
+  const targetCenterY = rect.top + rect.height / 2;
+  const targetCenterX = rect.left + rect.width / 2;
   let x = rect.right + margin;
   let y = rect.top + rect.height / 2 - bubbleRect.height / 2;
   bubble.className = "tutorial-bubble";
+  bubble.style.removeProperty("--arrow-x");
+  bubble.style.removeProperty("--arrow-y");
 
   if (x + bubbleRect.width > window.innerWidth - margin) {
     x = rect.left - bubbleRect.width - margin;
@@ -1047,6 +1163,11 @@ function positionTutorialBubble(target) {
   }
 
   y = clamp(y, margin, window.innerHeight - bubbleRect.height - margin);
+  if (bubble.classList.contains("top-arrow")) {
+    bubble.style.setProperty("--arrow-x", `${clamp(targetCenterX - x - 8, 18, bubbleRect.width - 34)}px`);
+  } else {
+    bubble.style.setProperty("--arrow-y", `${clamp(targetCenterY - y - 8, 14, bubbleRect.height - 30)}px`);
+  }
   bubble.style.left = `${x}px`;
   bubble.style.top = `${y}px`;
 }
@@ -1064,8 +1185,12 @@ function renderTutorialStep() {
   refs.tutorialLayer.hidden = false;
   refs.tutorialStepLabel.textContent = step.label;
   refs.tutorialText.textContent = step.text;
+  refs.tutorialNextButton.textContent = step.id === "start" ? "Finish" : "Next";
   step.target.classList.add("tutorial-target");
   step.target.scrollIntoView({ block: "center", inline: "center", behavior: "smooth" });
+  if (typeof step.target.focus === "function") {
+    step.target.focus({ preventScroll: true });
+  }
   window.setTimeout(() => positionTutorialBubble(step.target), 220);
 }
 
@@ -1091,6 +1216,21 @@ function advanceTutorial(stepId) {
 
   const step = getTutorialSteps()[state.tutorialStep];
   if (!step || step.id !== stepId) {
+    return;
+  }
+
+  state.tutorialStep += 1;
+  renderTutorialStep();
+}
+
+function advanceTutorialManually() {
+  if (!state.tutorialActive) {
+    return;
+  }
+
+  const step = getTutorialSteps()[state.tutorialStep];
+  if (!step || step.id === "start") {
+    endTutorial();
     return;
   }
 
@@ -1175,6 +1315,83 @@ async function ensureCamera() {
   await refs.camera.play();
   setStatus(refs.cameraStatus, "Camera ready", "live");
   ensurePoseLandmarker();
+}
+
+function stopCameraStream() {
+  if (!state.stream) {
+    return;
+  }
+
+  state.stream.getTracks().forEach((track) => track.stop());
+  state.stream = null;
+  refs.camera.srcObject = null;
+  refs.camera.removeAttribute("src");
+  refs.camera.load();
+}
+
+function setVisualDemoMode(enabled) {
+  if (state.gameActive || state.countdownActive || state.roundStarting) {
+    return;
+  }
+
+  state.visualDemoMode = enabled;
+  document.body.classList.toggle("is-demo-mode", enabled);
+  refs.demoModeButton.classList.toggle("active", enabled);
+  refs.demoModeButton.textContent = enabled ? "Real Camera" : "Demo Mode";
+  refs.demoModeButton.title = enabled
+    ? "Return to real camera play"
+    : "Use an anonymous synthetic dancer";
+
+  if (enabled) {
+    stopCameraStream();
+    state.poseSupported = false;
+    state.poseLandmarker = null;
+    state.poseLoadingPromise = null;
+    state.poseLandmarks = [];
+    state.poseBox = null;
+    state.prevPoseLandmarks = null;
+    state.trackingMode = "pose";
+    state.bodyDetected = true;
+    state.presence = 1;
+    state.currentSong = currentSongFromSelection();
+    if (!refs.songFile.files?.[0]) {
+      state.bpm = getBuiltInDemoBpm();
+      state.beatOffset = 0;
+      state.beatMap = createVisualDemoBeatMap(getBuiltInDemoDuration(), state.bpm);
+      state.useBeatMap = true;
+      state.beatInfoReady = true;
+      refreshSongSections();
+    }
+    setStatus(refs.cameraStatus, "Demo mode", "live");
+    setStatus(refs.bodyStatus, "Synthetic dancer", "live");
+    setStatus(refs.songStatus, refs.songFile.files?.[0] ? state.currentSong.title : "Demo showcase ready", "live");
+    if (!refs.songFile.files?.[0]) {
+      setMapStatus("Demo map ready", "live");
+    }
+    updateBeatStatus();
+    updateDifficultyFromBeatMap(0.92, 0.82);
+  } else {
+    state.poseLandmarks = [];
+    state.poseBox = null;
+    state.prevPoseLandmarks = null;
+    state.trackingMode = "motion";
+    state.bodyDetected = false;
+    state.presence = 0;
+    state.currentSong = currentSongFromSelection();
+    if (!refs.songFile.files?.[0]) {
+      state.beatMap = [];
+      state.songSections = [];
+      state.useBeatMap = false;
+      state.beatInfoReady = false;
+      setIdleStatuses();
+    } else {
+      setStatus(refs.songStatus, state.currentSong.title, "live");
+    }
+  }
+
+  setStartDisabled(false);
+  updateTrackingReadiness();
+  renderHud();
 }
 
 async function ensureAudioContext() {
@@ -1335,6 +1552,7 @@ function showDanceFlash() {
 
 function setRoundButtons(active) {
   const canInterrupt = active || state.roundStarting || state.countdownActive;
+  refs.demoModeButton.disabled = canInterrupt || state.analysisActive || state.calibrationActive;
   refs.pauseButton.disabled = !state.gameActive;
   refs.restartButton.disabled = !canInterrupt;
   refs.stopButton.disabled = !canInterrupt;
@@ -1352,6 +1570,8 @@ function togglePauseRound() {
         console.warn("Resume failed.", error);
         setStatus(refs.songStatus, "Audio blocked", "warn");
       });
+    } else if (state.audioMode === "visual-demo") {
+      state.demoStartTime = performance.now() / 1000 - state.pauseSongTime;
     } else if (state.audioContext) {
       state.demoStartTime = state.audioContext.currentTime - state.pauseSongTime;
       state.demoNextBeatIndex = Math.max(0, Math.floor(state.pauseSongTime / getBeatInterval()));
@@ -1468,6 +1688,14 @@ function currentSongFromSelection() {
   const file = refs.songFile.files?.[0];
 
   if (!file) {
+    if (state.visualDemoMode) {
+      return {
+        key: "visual-demo:showcase",
+        title: "Non-Personal Demo Mode",
+        duration: VISUAL_DEMO_DURATION,
+      };
+    }
+
     return {
       key: `demo:${Math.round(state.bpm)}`,
       title: `Demo Beat ${Math.round(state.bpm)} BPM`,
@@ -1495,16 +1723,20 @@ async function startRound() {
     return;
   }
 
+  const hasFile = Boolean(refs.songFile.files?.[0] && refs.songPlayer.src);
   try {
-    await ensureCamera();
-    await ensureAudioContext();
+    if (!state.visualDemoMode) {
+      await ensureCamera();
+    }
+    if (!state.visualDemoMode || !hasFile) {
+      await ensureAudioContext();
+    }
   } catch (error) {
     console.error(error);
     return;
   }
 
-  state.bpm = clamp(state.bpm || 120, 60, 220);
-  const hasFile = Boolean(refs.songFile.files?.[0] && refs.songPlayer.src);
+  state.bpm = state.visualDemoMode && !hasFile ? VISUAL_DEMO_BPM : clamp(state.bpm || 120, 60, 220);
 
   if (hasFile && state.analysisPromise) {
     setMapStatus("Audio map 90%", "warn");
@@ -1514,7 +1746,9 @@ async function startRound() {
   state.currentSong = currentSongFromSelection();
   if (!hasFile) {
     state.beatOffset = 0;
-    state.beatMap = createRegularBeatMap(DEMO_DURATION, state.bpm, 0);
+    state.beatMap = state.visualDemoMode
+      ? createVisualDemoBeatMap(getBuiltInDemoDuration(), state.bpm)
+      : createRegularBeatMap(getBuiltInDemoDuration(), state.bpm, 0);
     state.useBeatMap = true;
     state.beatInfoReady = true;
     refreshSongSections();
@@ -1531,7 +1765,7 @@ async function startRound() {
 
   resetRound();
 
-  state.audioMode = hasFile ? "file" : "demo";
+  state.audioMode = hasFile ? "file" : state.visualDemoMode ? "visual-demo" : "demo";
   state.roundStarting = true;
   state.paused = false;
   state.pauseSongTime = 0;
@@ -1566,6 +1800,12 @@ async function startRound() {
     state.roundStarting = false;
     setRoundButtons(true);
     setStatus(refs.songStatus, state.currentSong.title, "live");
+  } else if (state.audioMode === "visual-demo") {
+    state.demoStartTime = performance.now() / 1000 + 0.06;
+    state.gameActive = true;
+    state.roundStarting = false;
+    setRoundButtons(true);
+    setStatus(refs.songStatus, "Demo showcase playing", "live");
   } else {
     state.demoStartTime = state.audioContext.currentTime + 0.06;
     state.gameActive = true;
@@ -1610,7 +1850,7 @@ function finishRound({ save = true, showResults = save } = {}) {
   if (refs.songFile.files?.[0]) {
     setStatus(refs.songStatus, state.currentSong.title, "live");
   } else if (roundHadStarted) {
-    setStatus(refs.songStatus, "Demo beat ready");
+    setStatus(refs.songStatus, state.visualDemoMode ? "Demo showcase ready" : "Demo beat ready");
     setMapStatus("Demo map ready", "live");
     state.beatInfoReady = true;
     updateBeatStatus();
@@ -1631,6 +1871,10 @@ function getSongTime() {
 
   if (state.audioMode === "file") {
     return refs.songPlayer.currentTime || 0;
+  }
+
+  if (state.audioMode === "visual-demo") {
+    return state.gameActive ? Math.max(0, performance.now() / 1000 - state.demoStartTime) : 0;
   }
 
   if (!state.audioContext || !state.gameActive) {
@@ -2011,6 +2255,7 @@ async function analyzeSongFile(file) {
     );
     updateBeatStatus();
     updateDifficultyFromBeatMap(result.confidence, result.downbeatConfidence);
+    rememberRecentSong(state.currentSong);
     renderHud();
     return result;
   } catch (error) {
@@ -2026,6 +2271,7 @@ async function analyzeSongFile(file) {
       refreshSongSections();
       setMapStatus("Fallback map ready", "warn", `Audio analysis failed: ${error.message}`);
       updateDifficultyFromBeatMap(0.35, 0.25);
+      rememberRecentSong(state.currentSong);
     }
     return null;
   } finally {
@@ -2240,6 +2486,10 @@ function poseScoringActive() {
 }
 
 function bodyMissingForScoring() {
+  if (state.visualDemoMode) {
+    return false;
+  }
+
   return poseScoringActive() && (!state.bodyDetected || state.trackingMode === "no-body");
 }
 
@@ -2247,7 +2497,10 @@ function updateTrackingReadiness() {
   let text = "Camera idle";
   let className = "status-dot";
 
-  if (!state.stream) {
+  if (state.visualDemoMode) {
+    text = state.gameActive ? "Demo scoring" : "Demo dancer";
+    className += " live";
+  } else if (!state.stream) {
     text = "Player idle";
   } else if (state.poseSupported && state.poseLandmarker) {
     if (state.bodyDetected && state.trackingMode === "pose") {
@@ -2388,6 +2641,122 @@ function samplePose(songTime) {
     state.trackingMode = "motion";
     setStatus(refs.bodyStatus, "Motion fallback", "warn");
   }
+}
+
+function getVisualDemoBeatPlan(index) {
+  if (index > 5 && index % 23 === 14) {
+    return { offset: 0, intensity: 6, label: "miss" };
+  }
+  if (index % 13 === 8) {
+    return { offset: 0.152, intensity: 102, label: "good" };
+  }
+  if (index % 9 === 5) {
+    return { offset: -0.108, intensity: 108, label: "great" };
+  }
+
+  const drift = ((index % 5) - 2) * 0.012;
+  return { offset: drift, intensity: 118, label: "perfect" };
+}
+
+function getVisualDemoMotion(songTime) {
+  const beatMap = getActiveBeatMap();
+  const cameraAssist = getCameraAssistSeconds();
+  let strongest = {
+    rawEnergy: 5 + Math.max(0, Math.sin(songTime * Math.PI * 2)) * 3,
+    beatPulse: 0,
+  };
+
+  for (let index = 0; index < beatMap.length; index += 1) {
+    const plan = getVisualDemoBeatPlan(index);
+    const eventTime = beatMap[index].time + cameraAssist + plan.offset;
+    const distance = Math.abs(songTime - eventTime);
+
+    if (distance > 0.24) {
+      continue;
+    }
+
+    const pulse = Math.exp(-(distance * distance) / (2 * 0.042 * 0.042));
+    const rawEnergy = plan.label === "miss" ? 5 + pulse * 8 : plan.intensity * pulse;
+    if (rawEnergy > strongest.rawEnergy) {
+      strongest = {
+        rawEnergy,
+        beatPulse: pulse,
+      };
+    }
+  }
+
+  return strongest;
+}
+
+function makeLandmark(x, y, z = 0, visibility = 0.95) {
+  return { x: clamp(x, 0.04, 0.96), y: clamp(y, 0.04, 0.96), z, visibility };
+}
+
+function buildVisualDemoPose(songTime, rawEnergy, beatPulse) {
+  const landmarks = Array.from({ length: 33 }, () => makeLandmark(0.5, 0.5, 0, 0.05));
+  const beat = (songTime * state.bpm) / 60;
+  const groove = Math.sin(beat * Math.PI * 2);
+  const sway = Math.sin(songTime * 1.45) * 0.035;
+  const bounce = Math.max(0, Math.sin(beat * Math.PI * 2)) * 0.026;
+  const move = clamp(rawEnergy / 100, 0, 1.2);
+  const hitSwing = beatPulse * 0.12;
+  const centerX = 0.5 + sway;
+  const shoulderY = 0.34 + bounce * 0.34;
+  const hipY = 0.58 + bounce * 0.24;
+  const headY = 0.22 + bounce * 0.22 + Math.sin(songTime * 5.8) * 0.008 * move;
+  const leftArmLift = Math.sin(beat * Math.PI * 2 + 0.8) * 0.05 * move + hitSwing;
+  const rightArmLift = Math.sin(beat * Math.PI * 2 + 3.1) * 0.05 * move - hitSwing * 0.55;
+  const legKick = Math.sin(beat * Math.PI * 2 + 1.6) * 0.035 * move;
+
+  landmarks[0] = makeLandmark(centerX, headY, -0.05);
+  landmarks[7] = makeLandmark(centerX - 0.034, headY + 0.012, -0.04);
+  landmarks[8] = makeLandmark(centerX + 0.034, headY + 0.012, -0.04);
+  landmarks[9] = makeLandmark(centerX - 0.018, headY + 0.05, -0.03);
+  landmarks[10] = makeLandmark(centerX + 0.018, headY + 0.05, -0.03);
+  landmarks[11] = makeLandmark(centerX - 0.09, shoulderY, 0);
+  landmarks[12] = makeLandmark(centerX + 0.09, shoulderY, 0);
+  landmarks[13] = makeLandmark(centerX - 0.16 - move * 0.025, shoulderY + 0.12 - leftArmLift, 0);
+  landmarks[14] = makeLandmark(centerX + 0.16 + move * 0.025, shoulderY + 0.12 - rightArmLift, 0);
+  landmarks[15] = makeLandmark(centerX - 0.21 - move * 0.03, shoulderY + 0.25 - leftArmLift * 1.35, 0);
+  landmarks[16] = makeLandmark(centerX + 0.21 + move * 0.03, shoulderY + 0.25 - rightArmLift * 1.35, 0);
+  landmarks[17] = makeLandmark(centerX - 0.225 - move * 0.03, shoulderY + 0.27 - leftArmLift * 1.35, 0);
+  landmarks[18] = makeLandmark(centerX + 0.225 + move * 0.03, shoulderY + 0.27 - rightArmLift * 1.35, 0);
+  landmarks[23] = makeLandmark(centerX - 0.065, hipY, 0.02);
+  landmarks[24] = makeLandmark(centerX + 0.065, hipY, 0.02);
+  landmarks[25] = makeLandmark(centerX - 0.09 - legKick, hipY + 0.18, 0.02);
+  landmarks[26] = makeLandmark(centerX + 0.09 + legKick, hipY + 0.18, 0.02);
+  landmarks[27] = makeLandmark(centerX - 0.11 - legKick * 1.5, hipY + 0.36 - bounce, 0.02);
+  landmarks[28] = makeLandmark(centerX + 0.11 + legKick * 1.5, hipY + 0.36 - bounce, 0.02);
+  landmarks[31] = makeLandmark(centerX - 0.135 - legKick * 1.5, hipY + 0.39 - bounce, 0.02);
+  landmarks[32] = makeLandmark(centerX + 0.135 + legKick * 1.5, hipY + 0.39 - bounce, 0.02);
+
+  return landmarks;
+}
+
+function sampleVisualDemoDancer(songTime) {
+  const motion = getVisualDemoMotion(songTime);
+  const rawEnergy = clamp(motion.rawEnergy, 0, 120);
+  const positiveDelta = Math.max(0, rawEnergy - state.poseEnergy);
+  state.poseRawEnergy = rawEnergy;
+  state.poseEnergy = state.poseEnergy * 0.38 + rawEnergy * 0.62;
+  state.poseImpulse = clamp(state.poseEnergy + positiveDelta * 1.8, 0, 120);
+  if (rawEnergy >= getFreshMovementThreshold()) {
+    state.poseLastFreshTime = songTime;
+  }
+
+  state.poseLandmarks = buildVisualDemoPose(songTime, rawEnergy, motion.beatPulse);
+  state.poseBox = calculatePoseBox(state.poseLandmarks);
+  state.prevPoseLandmarks = state.poseLandmarks.map((landmark) => ({ ...landmark }));
+  state.prevPoseTime = songTime;
+  state.trackingMode = "pose";
+  state.bodyDetected = true;
+  state.bodyReacquireFrames = BODY_REACQUIRE_FRAMES;
+  state.presence = 1;
+  state.motionRawEnergy = rawEnergy;
+  state.motionEnergy = state.poseEnergy;
+  state.motionImpulse = state.poseImpulse;
+  refs.motionMeter.style.width = `${clamp(state.poseImpulse, 0, 100)}%`;
+  setStatus(refs.bodyStatus, state.gameActive ? "Demo scoring" : "Synthetic dancer", "live");
 }
 
 function recordTrackingSample(songTime) {
@@ -2872,6 +3241,7 @@ function renderHud() {
   document.body.classList.toggle("is-streak", state.combo >= 10);
   document.body.classList.toggle("is-flow", state.flowActive);
   document.body.classList.toggle("is-paused", state.paused);
+  document.body.classList.toggle("is-demo-mode", state.visualDemoMode);
   const activeBossSection = state.gameActive && !state.paused ? getBossSectionAtTime(getSongTime()) : null;
   document.body.classList.toggle("is-boss", Boolean(activeBossSection));
   refs.flowBadge.hidden = !state.flowActive;
@@ -2984,11 +3354,59 @@ function drawBodyTrackingOverlay(context, canvas) {
   return true;
 }
 
+function drawVisualDemoStage(context, canvas) {
+  const width = canvas.width;
+  const height = canvas.height;
+  const now = performance.now();
+  const activeBoss = state.gameActive && getBossSectionAtTime(getSongTime());
+  const sweep = (Math.sin(now / 280) + 1) / 2;
+
+  context.save();
+  context.fillStyle = "#06080c";
+  context.fillRect(0, 0, width, height);
+
+  const gradient = context.createLinearGradient(0, 0, width, height);
+  gradient.addColorStop(0, "rgba(85, 199, 247, 0.12)");
+  gradient.addColorStop(0.48, activeBoss ? "rgba(255, 209, 102, 0.2)" : "rgba(69, 212, 131, 0.09)");
+  gradient.addColorStop(1, "rgba(255, 79, 123, 0.12)");
+  context.fillStyle = gradient;
+  context.fillRect(0, 0, width, height);
+
+  context.strokeStyle = activeBoss ? "rgba(255, 209, 102, 0.18)" : "rgba(85, 199, 247, 0.12)";
+  context.lineWidth = 1;
+  for (let x = -width; x < width * 1.4; x += 54) {
+    const offset = ((now / 28) % 54) - 54;
+    context.beginPath();
+    context.moveTo(x + offset, height);
+    context.lineTo(x + offset + width * 0.24, 0);
+    context.stroke();
+  }
+
+  context.fillStyle = `rgba(69, 212, 131, ${0.06 + sweep * 0.04})`;
+  context.fillRect(width * 0.08, height * 0.1, width * 0.84, height * 0.8);
+  context.strokeStyle = "rgba(246, 242, 233, 0.12)";
+  context.strokeRect(width * 0.08, height * 0.1, width * 0.84, height * 0.8);
+
+  context.fillStyle = "rgba(246, 242, 233, 0.72)";
+  context.font = `${Math.max(15, Math.round(width * 0.018))}px Inter, system-ui, sans-serif`;
+  context.fillText("Synthetic demo dancer", 22, 32);
+  context.fillStyle = "rgba(170, 166, 160, 0.72)";
+  context.font = `${Math.max(12, Math.round(width * 0.014))}px Inter, system-ui, sans-serif`;
+  context.fillText("No camera feed or personal image", 22, 54);
+  context.restore();
+}
+
 function drawMotionOverlay() {
   const canvas = refs.motionCanvas;
   resizeCanvas(canvas);
   const context = canvas.getContext("2d");
   context.clearRect(0, 0, canvas.width, canvas.height);
+
+  if (state.visualDemoMode) {
+    drawVisualDemoStage(context, canvas);
+    drawBodyTrackingOverlay(context, canvas);
+    return;
+  }
 
   if (!state.stream) {
     return;
@@ -3277,7 +3695,19 @@ function handleSongFile() {
     state.useBeatMap = false;
     state.beatInfoReady = false;
     state.currentSong = currentSongFromSelection();
-    setIdleStatuses();
+    if (state.visualDemoMode) {
+      state.bpm = VISUAL_DEMO_BPM;
+      state.beatMap = createVisualDemoBeatMap(getBuiltInDemoDuration(), state.bpm);
+      state.useBeatMap = true;
+      state.beatInfoReady = true;
+      refreshSongSections();
+      setStatus(refs.songStatus, "Demo showcase ready", "live");
+      setMapStatus("Demo map ready", "live");
+      updateBeatStatus();
+      updateDifficultyFromBeatMap(0.92, 0.82);
+    } else {
+      setIdleStatuses();
+    }
     saveSettings();
     renderHud();
     return;
@@ -3318,8 +3748,12 @@ function animationLoop() {
   const songTime = getSongTime();
   const trackingTime = getTrackingClockTime();
 
-  sampleMotion(trackingTime);
-  samplePose(trackingTime);
+  if (state.visualDemoMode) {
+    sampleVisualDemoDancer(trackingTime);
+  } else {
+    sampleMotion(trackingTime);
+    samplePose(trackingTime);
+  }
   recordTrackingSample(trackingTime);
 
   if (state.gameActive && !state.paused) {
@@ -3341,12 +3775,20 @@ function animationLoop() {
 }
 
 refs.cameraButton.addEventListener("click", () => {
+  if (state.visualDemoMode) {
+    setVisualDemoMode(false);
+  }
+
   ensureCamera()
     .then(() => advanceTutorial("camera"))
     .catch((error) => {
       console.error(error);
       setStatus(refs.cameraStatus, "Camera blocked", "warn");
     });
+});
+
+refs.demoModeButton.addEventListener("click", () => {
+  setVisualDemoMode(!state.visualDemoMode);
 });
 
 refs.startButton.addEventListener("click", () => {
@@ -3389,11 +3831,6 @@ refs.playerName.addEventListener("input", () => {
   }
   saveSettings();
 });
-refs.playerName.addEventListener("focus", () => {
-  if (refs.playerName.value.trim()) {
-    window.setTimeout(() => advanceTutorial("player"), 420);
-  }
-});
 refs.clearScoresButton.addEventListener("click", () => {
   if (window.confirm("Clear local high scores?")) {
     persistScores([]);
@@ -3417,6 +3854,7 @@ refs.skipIntroButton.addEventListener("click", () => {
 });
 refs.showTutorialButton.addEventListener("click", startTutorial);
 refs.endTutorialButton.addEventListener("click", endTutorial);
+refs.tutorialNextButton.addEventListener("click", advanceTutorialManually);
 
 window.addEventListener("resize", () => {
   if (state.tutorialActive) {
@@ -3441,15 +3879,26 @@ window.addEventListener("beforeunload", () => {
   }
 });
 
+const launchParams = new URLSearchParams(window.location.search);
+const demoLaunchEnabled = launchParams.get("demo") === "1";
+
 renderLeaderboard();
+renderRecentSongs();
 loadSettings();
 state.currentSong = currentSongFromSelection();
 setIdleStatuses();
 syncDifficultyControl();
 syncCameraAssistControl();
+refs.demoModeButton.hidden = !demoLaunchEnabled;
 setRoundButtons(false);
 updateTrackingReadiness();
-if (shouldShowIntro()) {
+if (demoLaunchEnabled) {
+  setVisualDemoMode(true);
+  markIntroSeen();
+  hideIntro();
+} else if (launchParams.get("tutorial") === "1") {
+  startTutorial();
+} else if (shouldShowIntro()) {
   showIntro();
 }
 window.requestAnimationFrame(animationLoop);
