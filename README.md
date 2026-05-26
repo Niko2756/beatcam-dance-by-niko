@@ -18,6 +18,8 @@ The non-personal demo mode is hosted here:
 
 Use this link for camera-free previews, educational demonstrations, and sharing the project without showing a real person or room. The hosted demo uses the synthetic dancer and does not require camera access.
 
+Uploaded songs are supported in the hosted synthetic-dancer demo. On mobile, MP3, M4A/AAC, and WAV are the recommended formats.
+
 For full webcam gameplay, run the project locally with the instructions below.
 
 ## Install and run locally

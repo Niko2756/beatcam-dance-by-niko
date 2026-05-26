@@ -86,7 +86,11 @@
           </label>
           <label class="file-picker">
             <span>Song</span>
-            <input id="songFile" type="file" accept="audio/*" />
+            <input
+              id="songFile"
+              type="file"
+              accept=".mp3,.m4a,.mp4,.aac,.wav,.aif,.aiff,.caf,audio/mpeg,audio/mp4,audio/x-m4a,audio/aac,audio/wav,audio/x-wav,audio/aiff,audio/x-aiff,audio/x-caf"
+            />
           </label>
           <audio id="songPlayer" controls preload="metadata"></audio>
           <div class="song-meta" aria-label="Song details">
