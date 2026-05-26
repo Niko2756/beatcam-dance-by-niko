@@ -10,6 +10,16 @@ The game is designed around free movement: you do not have to perform a specific
 
 ![Post-song results breakdown](assets/non-personal-demo-results.png)
 
+## Hosted Demo
+
+The non-personal demo mode is hosted here:
+
+[https://vivid-crystal-b9y2.here.now/](https://vivid-crystal-b9y2.here.now/)
+
+Use this link for camera-free previews, educational demonstrations, and sharing the project without showing a real person or room. The hosted demo uses the synthetic dancer and does not require camera access.
+
+For full webcam gameplay, run the project locally with the instructions below.
+
 ## Install and run locally
 
 BeatCam Dance by Niko is a static browser app. There is no `npm install` or build step. To "install" it, put the project folder anywhere on your computer, such as `Desktop`, `Documents`, or a development folder.
